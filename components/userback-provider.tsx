@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { secureUserback } from "@/lib/secure-userback"
+import { userbackClient } from "@/lib/userback-client"
 
 interface UserbackContextType {
   isEnabled: boolean
@@ -16,7 +16,7 @@ interface UserbackContextType {
 const UserbackContext = createContext<UserbackContextType>({
   isEnabled: false,
   isInitialized: false,
-  isLoading: false, // Changed to false by default
+  isLoading: false,
   hasToken: false,
   error: null,
   useFallback: true,
@@ -30,13 +30,12 @@ interface UserbackProviderProps {
 }
 
 export function UserbackProvider({ children, userId }: UserbackProviderProps) {
-  const [isLoading, setIsLoading] = useState(false) // Start as false
+  const [isLoading, setIsLoading] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [hasToken, setHasToken] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Don't block UI, initialize in background
     if (userId) {
       initializeUserback()
     }
@@ -47,22 +46,12 @@ export function UserbackProvider({ children, userId }: UserbackProviderProps) {
     setError(null)
 
     try {
-      // Set a shorter timeout for the entire initialization process
-      const initPromise = secureUserback.initialize(userId)
-      const timeoutPromise = new Promise<boolean>(
-        (resolve) =>
-          setTimeout(() => {
-            console.warn("Userback initialization timeout, using fallback")
-            resolve(false)
-          }, 5000), // Reduced to 5 seconds
-      )
-
-      const success = await Promise.race([initPromise, timeoutPromise])
+      const success = await userbackClient.initialize(userId)
 
       if (success) {
         setIsInitialized(true)
-        setHasToken(secureUserback.hasToken())
-        console.log("Userback initialized successfully with visual feedback")
+        setHasToken(true)
+        console.log("Userback initialized successfully")
       } else {
         setIsInitialized(false)
         setHasToken(false)

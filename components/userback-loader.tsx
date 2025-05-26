@@ -3,35 +3,41 @@
 import { useEffect, useState } from "react"
 
 export default function UserbackLoader() {
-  const [loaded, setLoaded] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    if (loaded) return
+    if (initialized) return
 
-    // Load the Userback script from our secure API route
-    const script = document.createElement("script")
-    script.src = "/api/userback"
-    script.async = true
+    async function initUserback() {
+      try {
+        // Fetch the script content from our API
+        const response = await fetch("/api/userback")
 
-    script.onload = () => {
-      setLoaded(true)
-      console.log("Userback script loaded from API")
-    }
+        if (!response.ok) {
+          console.warn("Userback API not available")
+          return
+        }
 
-    script.onerror = () => {
-      console.warn("Failed to load Userback script from API")
-    }
+        const scriptContent = await response.text()
 
-    document.head.appendChild(script)
+        // Execute the script content directly
+        const scriptFunction = new Function(scriptContent)
+        scriptFunction()
 
-    return () => {
-      // Cleanup if component unmounts
-      const existingScript = document.querySelector('script[src="/api/userback"]')
-      if (existingScript) {
-        existingScript.remove()
+        setInitialized(true)
+        console.log("Userback initialized via API")
+      } catch (error) {
+        console.warn("Failed to initialize Userback:", error)
+
+        // Fallback: Initialize empty Userback to prevent errors
+        if (typeof window !== "undefined") {
+          window.Userback = window.Userback || []
+        }
       }
     }
-  }, [loaded])
 
-  return null // This component doesn't render anything visible
+    initUserback()
+  }, [initialized])
+
+  return null
 }

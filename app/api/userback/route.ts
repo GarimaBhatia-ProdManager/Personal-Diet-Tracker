@@ -1,19 +1,32 @@
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  try {
-    const userbackToken = process.env.NEXT_PUBLIC_USERBACK_TOKEN
+  // Use a server-only environment variable (without NEXT_PUBLIC_ prefix)
+  const userbackToken = process.env.USERBACK_TOKEN
 
-    if (!userbackToken) {
-      return NextResponse.json({ error: "Userback not configured" }, { status: 404 })
-    }
+  if (!userbackToken) {
+    const emptyScript = `
+      console.warn('Userback not configured');
+      if (typeof window !== 'undefined') {
+        window.Userback = window.Userback || [];
+      }
+    `
+    return new NextResponse(emptyScript, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain",
+        "Cache-Control": "no-cache",
+      },
+    })
+  }
 
-    // Return the Userback initialization script
-    const script = `
-      (function() {
-        if (window.userbackInitialized) return;
+  const script = `
+    (function() {
+      if (typeof window === 'undefined') return;
+      if (window.userbackInitialized) return;
+      
+      try {
         window.userbackInitialized = true;
-        
         window.Userback = window.Userback || [];
         window.Userback.push(['init', { token: '${userbackToken}' }]);
         
@@ -22,27 +35,27 @@ export async function GET() {
         script.async = true;
         
         script.onload = function() {
-          console.log('Userback loaded successfully');
+          console.log('Userback widget loaded');
         };
         
         script.onerror = function() {
-          console.warn('Failed to load Userback');
+          console.warn('Failed to load Userback widget');
         };
         
         if (!document.querySelector('script[src*="userback.io"]')) {
           document.head.appendChild(script);
         }
-      })();
-    `
+      } catch (error) {
+        console.warn('Userback initialization error:', error);
+      }
+    })();
+  `
 
-    return new NextResponse(script, {
-      headers: {
-        "Content-Type": "application/javascript",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-      },
-    })
-  } catch (error) {
-    console.error("Error serving Userback script:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
+  return new NextResponse(script, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain",
+      "Cache-Control": "no-cache",
+    },
+  })
 }
