@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Eye, EyeOff, Mail, Lock, User, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, User, Loader2, AlertCircle, ExternalLink, Copy, CheckCircle } from "lucide-react"
 import { signUp, signIn, signInWithGoogle } from "@/lib/auth"
 import { trackAuthEvent } from "@/lib/analytics"
 
@@ -24,6 +24,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [googleError, setGoogleError] = useState(false)
+  const [showOAuthFix, setShowOAuthFix] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -33,10 +36,13 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     fullName: "",
   })
 
+  const supabaseRedirectUri = "https://ussapzuqhkmrrtislyupi.supabase.co/auth/v1/callback"
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     // Clear errors when user starts typing
     if (error) setError(null)
+    if (googleError) setGoogleError(false)
   }
 
   const validateForm = () => {
@@ -79,16 +85,20 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
         if (result.user) {
           await trackAuthEvent("signup_success", formData.email, true)
-          setSuccess("Account created successfully! Please check your email to verify your account.")
 
-          // Clear form
-          setFormData({ email: "", password: "", confirmPassword: "", fullName: "" })
-
-          // Switch to sign in tab after successful signup
-          setTimeout(() => {
-            setActiveTab("signin")
-            setSuccess(null)
-          }, 3000)
+          if (result.user.email_confirmed_at) {
+            setSuccess("Account created successfully! You are now signed in.")
+            if (onAuthSuccess) {
+              onAuthSuccess()
+            }
+          } else {
+            setSuccess("Account created successfully! Please check your email to verify your account.")
+            setFormData({ email: "", password: "", confirmPassword: "", fullName: "" })
+            setTimeout(() => {
+              setActiveTab("signin")
+              setSuccess(null)
+            }, 3000)
+          }
         }
       } else {
         await trackAuthEvent("login_attempt", formData.email)
@@ -98,7 +108,6 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
           await trackAuthEvent("login_success", formData.email, true)
           setSuccess("Successfully signed in!")
 
-          // Call success callback if provided
           if (onAuthSuccess) {
             onAuthSuccess()
           }
@@ -106,9 +115,19 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       }
     } catch (err: any) {
       console.error("Auth error:", err)
-      const errorMessage = err.message || "Authentication failed. Please try again."
-      setError(errorMessage)
+      let errorMessage = "Authentication failed. Please try again."
 
+      if (err.message?.includes("Invalid login credentials")) {
+        errorMessage = "Invalid email or password. Please check your credentials."
+      } else if (err.message?.includes("Email not confirmed")) {
+        errorMessage = "Please check your email and click the confirmation link before signing in."
+      } else if (err.message?.includes("User already registered")) {
+        errorMessage = "An account with this email already exists. Please sign in instead."
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
+      setError(errorMessage)
       await trackAuthEvent(activeTab === "signup" ? "signup_error" : "login_error", formData.email, false, errorMessage)
     } finally {
       setIsLoading(false)
@@ -119,6 +138,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
+    setGoogleError(false)
 
     try {
       await trackAuthEvent("google_auth_attempt")
@@ -128,20 +148,51 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
         await trackAuthEvent("google_auth_success", undefined, true)
         setSuccess("Redirecting to Google...")
 
-        // Call success callback if provided
         if (onAuthSuccess) {
           onAuthSuccess()
         }
       }
     } catch (err: any) {
       console.error("Google auth error:", err)
-      const errorMessage = err.message || "Google authentication failed. Please try again."
-      setError(errorMessage)
+      setGoogleError(true)
 
+      let errorMessage = "Google authentication failed."
+
+      if (err.message?.includes("redirect_uri_mismatch")) {
+        errorMessage = "OAuth redirect URL mismatch detected. Click 'Fix OAuth Setup' below for instructions."
+        setShowOAuthFix(true)
+      } else if (err.message?.includes("popup_blocked")) {
+        errorMessage = "Popup was blocked. Please allow popups and try again."
+      } else if (err.message?.includes("access_denied")) {
+        errorMessage = "Google sign-in was cancelled."
+      } else if (err.message?.includes("network")) {
+        errorMessage = "Network error. Please check your connection and try again."
+      }
+
+      setError(errorMessage)
       await trackAuthEvent("google_auth_error", undefined, false, errorMessage)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
+  }
+
+  const fillDemoAccount = () => {
+    setFormData({
+      ...formData,
+      email: "demo@example.com",
+      password: "demo123",
+    })
+    setActiveTab("signin")
   }
 
   return (
@@ -161,6 +212,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
           {/* Error Alert */}
           {error && (
             <Alert variant="destructive" className="rounded-custom">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -168,11 +220,52 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
           {/* Success Alert */}
           {success && (
             <Alert className="bg-green-50 border border-green-200 rounded-custom">
+              <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">{success}</AlertDescription>
             </Alert>
           )}
 
-          {/* Google Sign In Button - Primary CTA */}
+          {/* OAuth Fix Instructions */}
+          {showOAuthFix && (
+            <Alert className="bg-red-50 border border-red-200 rounded-custom">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                <div className="space-y-3">
+                  <p className="font-medium">🔧 OAuth Redirect URI Fix Required</p>
+                  <div className="space-y-2">
+                    <p className="text-sm">Add this redirect URI to your Google Cloud Console:</p>
+                    <div className="flex items-center gap-2 p-2 bg-white rounded border">
+                      <code className="text-xs flex-1 break-all">{supabaseRedirectUri}</code>
+                      <Button
+                        onClick={() => copyToClipboard(supabaseRedirectUri)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                      >
+                        {copied ? <CheckCircle className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => window.open("https://console.cloud.google.com/apis/credentials", "_blank")}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open Google Console
+                      </Button>
+                      <Button onClick={() => setShowOAuthFix(false)} variant="ghost" size="sm" className="text-xs">
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Google Sign In Button */}
           <Button
             onClick={handleGoogleAuth}
             disabled={isLoading}
@@ -410,10 +503,20 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
             </TabsContent>
           </Tabs>
 
-          {/* Demo Info */}
-          <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-custom">
-            <p className="font-medium mb-1">Demo Account (for testing)</p>
-            <p className="text-xs">Email: demo@example.com | Password: demo123</p>
+          {/* Demo Account Section */}
+          <div className="space-y-3">
+            <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-custom">
+              <p className="font-medium mb-1">🚀 Try the Demo Account</p>
+              <p className="text-xs mb-2">Email: demo@example.com | Password: demo123</p>
+              <Button
+                onClick={fillDemoAccount}
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-custom border-gray-300"
+              >
+                Fill Demo Credentials
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -75,6 +75,9 @@ export const signIn = async (email: string, password: string) => {
 
 export const signInWithGoogle = async () => {
   try {
+    // Check if we're in a development environment
+    const isDevelopment = typeof window !== "undefined" && window.location.hostname === "localhost"
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -83,11 +86,23 @@ export const signInWithGoogle = async () => {
           access_type: "offline",
           prompt: "consent",
         },
+        // Skip redirect in development if OAuth is not configured
+        skipBrowserRedirect: isDevelopment,
       },
     })
 
     if (error) {
       console.error("Google OAuth error:", error)
+
+      // Provide more specific error messages
+      if (error.message?.includes("Invalid provider")) {
+        throw new Error("Google authentication is not configured. Please use email authentication.")
+      } else if (error.message?.includes("redirect_uri_mismatch")) {
+        throw new Error("OAuth redirect URL mismatch. Please contact support.")
+      } else if (error.message?.includes("access_denied")) {
+        throw new Error("Google sign-in was cancelled.")
+      }
+
       throw error
     }
 
