@@ -12,6 +12,8 @@ import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart } 
 import { supabase } from "@/lib/supabase"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
+import { analytics, usePageTracking } from "@/lib/analytics"
+import { trackEvent } from "@/lib/analytics"
 
 interface UserProfileProps {
   user: AuthUser
@@ -20,6 +22,7 @@ interface UserProfileProps {
 }
 
 export default function UserProfile({ user, userProfile, onProfileUpdate }: UserProfileProps) {
+  usePageTracking("profile")
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +167,25 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
     setSuccess(null)
 
     try {
+      // Track which fields changed
+      const changedFields: string[] = []
+      if (formData.full_name !== userProfile?.full_name) changedFields.push("full_name")
+      if (formData.age !== userProfile?.age) changedFields.push("age")
+      if (formData.height !== userProfile?.height) changedFields.push("height")
+      if (formData.weight !== userProfile?.weight) changedFields.push("weight")
+      if (formData.activity_level !== userProfile?.activity_level) changedFields.push("activity_level")
+      if (formData.goal_type !== userProfile?.goal_type) changedFields.push("goal_type")
+      if (formData.dietary_restrictions !== userProfile?.dietary_restrictions)
+        changedFields.push("dietary_restrictions")
+
+      // Track goal adjustments specifically
+      if (formData.daily_calories !== userProfile?.daily_calories) {
+        await analytics.trackGoalAdjusted("calories", userProfile?.daily_calories || 0, formData.daily_calories)
+      }
+      if (formData.daily_protein !== userProfile?.daily_protein) {
+        await analytics.trackGoalAdjusted("protein", userProfile?.daily_protein || 0, formData.daily_protein)
+      }
+
       const { data, error: updateError } = await supabase
         .from("user_profiles")
         .update({
@@ -185,6 +207,9 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
         .single()
 
       if (updateError) throw updateError
+
+      // Track profile update analytics
+      await analytics.trackProfileUpdated(changedFields)
 
       onProfileUpdate(data)
       setIsEditing(false)
@@ -237,7 +262,13 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
             </div>
             {!isEditing ? (
               <Button
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  trackEvent({
+                    event_type: "profile_edit_start",
+                    event_data: {},
+                  })
+                  setIsEditing(true)
+                }}
                 variant="outline"
                 size="sm"
                 className="rounded-custom border-gray-300"

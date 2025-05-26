@@ -1,13 +1,288 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TrendingUp, TrendingDown, Calendar, BarChart3, PieChart, Target } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  BarChart3,
+  PieChart,
+  Target,
+  Plus,
+  Utensils,
+  Clock,
+  ChefHat,
+} from "lucide-react"
+import { getMealEntriesForDate } from "@/lib/meal-logging"
+import { usePageTracking, trackEvent, ANALYTICS_EVENTS } from "@/lib/analytics"
 
-export default function TrendsAnalytics() {
-  // Mock data for demonstration
+interface TrendsAnalyticsProps {
+  userId: string
+}
+
+export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
+  usePageTracking("trends")
+  const [hasData, setHasData] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [totalMealsLogged, setTotalMealsLogged] = useState(0)
+  const [daysWithData, setDaysWithData] = useState(0)
+
+  useEffect(() => {
+    checkUserData()
+  }, [userId])
+
+  useEffect(() => {
+    trackEvent({ event_type: ANALYTICS_EVENTS.WEEKLY_TRENDS_VIEW })
+  }, [])
+
+  useEffect(() => {
+    trackEvent({ event_type: ANALYTICS_EVENTS.MONTHLY_TRENDS_VIEW })
+  }, [])
+
+  useEffect(() => {
+    trackEvent({ event_type: ANALYTICS_EVENTS.INSIGHTS_VIEW })
+  }, [])
+
+  const checkUserData = async () => {
+    setLoading(true)
+    try {
+      // Check the last 30 days for any meal entries
+      let totalMeals = 0
+      let daysWithMeals = 0
+
+      for (let i = 0; i < 30; i++) {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        const dateString = date.toISOString().split("T")[0]
+
+        const meals = await getMealEntriesForDate(userId, dateString)
+        if (meals.length > 0) {
+          totalMeals += meals.length
+          daysWithMeals++
+        }
+      }
+
+      setTotalMealsLogged(totalMeals)
+      setDaysWithData(daysWithMeals)
+
+      // Consider user has meaningful data if they have logged meals on at least 3 days
+      setHasData(daysWithMeals >= 3 && totalMeals >= 5)
+    } catch (error) {
+      console.error("Error checking user data:", error)
+      setHasData(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your trends...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Empty state for new users
+  if (!hasData) {
+    return (
+      <div className="space-y-6">
+        {/* Welcome Card */}
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 rounded-custom">
+          <CardHeader className="text-center pb-4">
+            <div className="w-16 h-16 bg-primary rounded-custom flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="h-8 w-8 text-white" />
+            </div>
+            <CardTitle className="text-2xl text-gray-900">Start Your Nutrition Journey!</CardTitle>
+            <CardDescription className="text-gray-600 text-lg">
+              Track your meals for a few days to unlock personalized insights and trends
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="p-4 bg-white rounded-custom border border-gray-200">
+                <Utensils className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                <h3 className="font-semibold text-gray-900 mb-1">Log Your Meals</h3>
+                <p className="text-sm text-gray-600">Start by logging your breakfast, lunch, and dinner</p>
+              </div>
+              <div className="p-4 bg-white rounded-custom border border-gray-200">
+                <Clock className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                <h3 className="font-semibold text-gray-900 mb-1">Track Consistently</h3>
+                <p className="text-sm text-gray-600">Log meals for at least 3-5 days to see patterns</p>
+              </div>
+              <div className="p-4 bg-white rounded-custom border border-gray-200">
+                <TrendingUp className="h-8 w-8 text-purple-500 mx-auto mb-2" />
+                <h3 className="font-semibold text-gray-900 mb-1">Unlock Insights</h3>
+                <p className="text-sm text-gray-600">Get personalized trends and recommendations</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-custom p-4 border border-gray-200 mb-6">
+              <h4 className="font-semibold text-gray-900 mb-3">Your Progress So Far</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{totalMealsLogged}</p>
+                  <p className="text-sm text-gray-600">Meals Logged</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-blue-600">{daysWithData}</p>
+                  <p className="text-sm text-gray-600">Days Tracked</p>
+                </div>
+              </div>
+
+              {totalMealsLogged > 0 && (
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">Progress to Trends</span>
+                    <span className="text-sm text-gray-600">{Math.min(daysWithData, 3)}/3 days</span>
+                  </div>
+                  <Progress value={(Math.min(daysWithData, 3) / 3) * 100} className="h-2" />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {daysWithData >= 3
+                      ? "Almost there! Log a few more meals to unlock trends."
+                      : `${3 - daysWithData} more days of logging to unlock trends`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Button
+              className="bg-primary hover:bg-primary/90 text-white rounded-custom px-8 py-3"
+              onClick={() => {
+                // This would typically navigate to the log tab
+                const event = new CustomEvent("switchTab", { detail: "log" })
+                window.dispatchEvent(event)
+              }}
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Log Your First Meal
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Tips for New Users */}
+        <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-900">
+              <ChefHat className="h-5 w-5 text-primary" />
+              Quick Start Tips
+            </CardTitle>
+            <CardDescription className="text-gray-600">
+              Make the most of your nutrition tracking journey
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-3 bg-green-50 rounded-custom border border-green-200">
+                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-sm font-bold">1</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-green-800 mb-1">Start Simple</h4>
+                  <p className="text-sm text-green-700">
+                    Begin by logging just your main meals. You can add snacks and details later.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-custom border border-blue-200">
+                <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-sm font-bold">2</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-blue-800 mb-1">Be Consistent</h4>
+                  <p className="text-sm text-blue-700">
+                    Try to log meals at the same time each day. Even 3-4 days of data reveals patterns.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-custom border border-purple-200">
+                <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-sm font-bold">3</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-purple-800 mb-1">Use Quick Add</h4>
+                  <p className="text-sm text-purple-700">
+                    Use the quick-add buttons on the dashboard for common foods to save time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-custom border border-orange-200">
+                <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-sm font-bold">4</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-orange-800 mb-1">Don't Stress Perfection</h4>
+                  <p className="text-sm text-orange-700">
+                    Approximate portions are fine. The goal is to understand your eating patterns.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* What You'll Unlock */}
+        <Card className="bg-gradient-to-r from-gray-50 to-green-50 border-gray-200 rounded-custom">
+          <CardHeader>
+            <CardTitle className="text-gray-900">What You'll Unlock</CardTitle>
+            <CardDescription className="text-gray-600">
+              Here's what you'll see once you have enough data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-900">📊 Weekly Trends</h4>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  <li>• Daily calorie and macro patterns</li>
+                  <li>• Meal completion rates</li>
+                  <li>• Nutrition goal progress</li>
+                </ul>
+              </div>
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-900">🎯 Smart Insights</h4>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  <li>• Personalized recommendations</li>
+                  <li>• Eating pattern analysis</li>
+                  <li>• Goal achievement predictions</li>
+                </ul>
+              </div>
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-900">📈 Monthly Analytics</h4>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  <li>• Long-term progress tracking</li>
+                  <li>• Habit formation insights</li>
+                  <li>• Favorite foods analysis</li>
+                </ul>
+              </div>
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-900">🏆 Achievements</h4>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  <li>• Streak tracking</li>
+                  <li>• Goal milestones</li>
+                  <li>• Consistency rewards</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Existing trends content for users with data
   const weeklyData = [
     { day: "Mon", calories: 1850, protein: 140, carbs: 200, fat: 60, completion: 92 },
     { day: "Tue", calories: 2100, protein: 155, carbs: 250, fat: 70, completion: 98 },
@@ -166,52 +441,6 @@ export default function TrendsAnalytics() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Monthly Insights */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Insights</CardTitle>
-              <CardDescription>Key patterns and achievements this month</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <h4 className="font-semibold">Achievements</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm">Logged {monthlyStats.totalMealsLogged} meals</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm">Best streak: {monthlyStats.bestStreak} days</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <span className="text-sm">Most active: {monthlyStats.mostActiveDay}s</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <h4 className="font-semibold">Favorites</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                      <span className="text-sm">Top food: {monthlyStats.favoriteFood}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <span className="text-sm">Preferred meal: Lunch</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
-                      <span className="text-sm">Avg log time: 2.3 min</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
@@ -255,33 +484,6 @@ export default function TrendsAnalytics() {
                   <p className="text-sm text-gray-700">
                     Based on your current trends, you're on track to reach your monthly goals with 94% completion rate.
                   </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Behavioral Analytics */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Behavioral Analytics</CardTitle>
-              <CardDescription>Understanding your nutrition habits</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-lg font-bold text-green-600">Morning</p>
-                  <p className="text-sm text-gray-600">Most consistent logging</p>
-                  <p className="text-xs text-gray-500">95% completion rate</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-lg font-bold text-blue-600">2.3 min</p>
-                  <p className="text-sm text-gray-600">Avg time per log</p>
-                  <p className="text-xs text-gray-500">15% faster than average</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-lg font-bold text-purple-600">Weekends</p>
-                  <p className="text-sm text-gray-600">Peak activity time</p>
-                  <p className="text-xs text-gray-500">20% more detailed logs</p>
                 </div>
               </div>
             </CardContent>

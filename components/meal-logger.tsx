@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, Search, Clock, Utensils, Sparkles, Zap, Loader2, Trash2, Database, Globe } from "lucide-react"
 import { searchFoodsSimple, type NormalizedFood } from "@/lib/food-apis"
 import { logMealEntry, getMealEntriesForDate, deleteMealEntry, type MealEntry } from "@/lib/meal-logging"
+import { analytics, trackEvent, ANALYTICS_EVENTS } from "@/lib/analytics"
 
 interface MealLoggerProps {
   userId: string
@@ -52,10 +53,19 @@ export default function MealLogger({ userId }: MealLoggerProps) {
       setIsSearching(true)
       setError(null)
 
+      // Track search start
+      await trackEvent({
+        event_type: ANALYTICS_EVENTS.MEAL_SEARCH_START,
+        event_data: { query },
+      })
+
       try {
         // Use the simple search function for better reliability
         const results = await searchFoodsSimple(query)
         setSearchResults(results)
+
+        // Track search results
+        await analytics.trackMealSearch(query, results.length)
 
         if (results.length === 0) {
           console.log("No results found for query:", query)
@@ -104,6 +114,14 @@ export default function MealLogger({ userId }: MealLoggerProps) {
       )
 
       if (result) {
+        // Track meal addition analytics
+        await analytics.trackMealAdded(
+          food.name,
+          selectedMealType,
+          Math.round(food.calories * servingSize),
+          food.source,
+        )
+
         setSuccess(`Added ${food.name} to ${selectedMealType}!`)
         setSearchQuery("")
         setSearchResults([])
@@ -135,6 +153,9 @@ export default function MealLogger({ userId }: MealLoggerProps) {
       serving: customFood.serving || "1 serving",
       source: "local",
     }
+
+    // Track custom food addition
+    await analytics.trackCustomFoodAdded(customFood.name, Number.parseFloat(customFood.calories))
 
     await addFoodToMeal(normalizedCustomFood)
     setCustomFood({ name: "", calories: "", protein: "", carbs: "", fat: "", serving: "" })

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Mail, Lock, User, Leaf } from "lucide-react"
 import { signUp, signIn } from "@/lib/auth"
+import { trackAuthEvent } from "@/lib/analytics"
 
 interface AuthFormProps {
   onAuthSuccess: () => void
@@ -54,6 +55,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     try {
       const result = await signUp(signUpData.email, signUpData.password, signUpData.fullName)
 
+      // Track successful signup
+      await trackAuthEvent("signup_success", signUpData.email, true)
+
       if (result.user && !result.user.email_confirmed_at) {
         setSuccess("Account created successfully! Please check your email to verify your account before signing in.")
       } else {
@@ -62,6 +66,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
       setSignUpData({ email: "", password: "", confirmPassword: "", fullName: "" })
     } catch (err: any) {
+      // Track failed signup
+      await trackAuthEvent("signup_failed", signUpData.email, false, err.message)
+
       if (err.message.includes("already registered")) {
         setError("An account with this email already exists. Please sign in instead.")
       } else {
@@ -79,8 +86,15 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
     try {
       await signIn(signInData.email, signInData.password)
+
+      // Track successful login
+      await trackAuthEvent("login_success", signInData.email, true)
+
       onAuthSuccess()
     } catch (err: any) {
+      // Track failed login
+      await trackAuthEvent("login_failed", signInData.email, false, err.message)
+
       setError(err.message || "Failed to sign in")
     } finally {
       setIsLoading(false)
