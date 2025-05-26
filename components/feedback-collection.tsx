@@ -11,6 +11,8 @@ import { Progress } from "@/components/ui/progress"
 import { MessageSquare, Star, Send, Users, TrendingUp, Clock } from "lucide-react"
 import { submitFeedbackToSupabase } from "@/lib/actions/feedback-actions"
 import { supabase } from "@/lib/supabase"
+import { AlertDescription } from "@/components/ui/alert"
+import { Alert } from "@/components/ui/alert"
 
 export default function FeedbackCollection() {
   const [feedback, setFeedback] = useState({
@@ -20,6 +22,7 @@ export default function FeedbackCollection() {
     email: "",
   })
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const categories = [
     "User Interface",
@@ -80,10 +83,10 @@ export default function FeedbackCollection() {
           data: { user },
         } = await supabase.auth.getUser()
 
-        // Submit to Supabase
+        // Submit to Supabase using the server action
         const result = await submitFeedbackToSupabase(user?.id || null, {
           rating: feedback.rating,
-          category: feedback.category,
+          category: feedback.category || "General",
           message: feedback.message,
           email: feedback.email,
           feedbackType: "beta_testing",
@@ -91,21 +94,28 @@ export default function FeedbackCollection() {
             userAgent: navigator.userAgent,
             timestamp: new Date().toISOString(),
             source: "feedback_collection_component",
+            url: window.location.href,
           },
         })
 
         if (result.success) {
           setSubmitted(true)
-          console.log("Feedback submitted to Supabase:", result.data)
+          console.log("Feedback submitted successfully:", result.data)
+
+          // Reset form
+          setFeedback({
+            rating: 0,
+            category: "",
+            message: "",
+            email: "",
+          })
         } else {
           console.error("Failed to submit feedback:", result.error)
-          // Still show success to user, but log the error
-          setSubmitted(true)
+          setError("Failed to submit feedback. Please try again.")
         }
       } catch (error) {
         console.error("Error submitting feedback:", error)
-        // Still show success to user
-        setSubmitted(true)
+        setError("An error occurred while submitting feedback.")
       }
     }
   }
@@ -185,6 +195,11 @@ export default function FeedbackCollection() {
             <CardDescription>Your input helps us build a better nutrition tracking experience</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive" className="rounded-custom mb-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label>Overall Rating</Label>
               <div className="flex items-center gap-2">

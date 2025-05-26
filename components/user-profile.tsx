@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart, Eye, EyeOff, Lock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
@@ -27,6 +28,18 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [showPasswordSection, setShowPasswordSection] = useState(false)
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  })
+  const [passwordLoading, setPasswordLoading] = useState(false)
 
   const [formData, setFormData] = useState({
     full_name: userProfile?.full_name || "",
@@ -243,13 +256,53 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
     setSuccess(null)
   }
 
+  const handlePasswordChange = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError("New passwords don't match")
+      return
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setError("New password must be at least 6 characters")
+      return
+    }
+
+    setPasswordLoading(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwordData.newPassword,
+      })
+
+      if (error) throw error
+
+      setSuccess("Password updated successfully!")
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+      setShowPasswordSection(false)
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err: any) {
+      setError(err.message || "Failed to update password")
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Success/Error Messages */}
-      {error && <div className="bg-red-50 border border-red-200 rounded-custom p-4 text-red-800">{error}</div>}
+      {error && (
+        <Alert variant="destructive" className="rounded-custom">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-custom p-4 text-green-800">{success}</div>
+        <Alert className="bg-green-50 border border-green-200 rounded-custom">
+          <AlertDescription className="text-green-800">{success}</AlertDescription>
+        </Alert>
       )}
 
       {/* Personal Information */}
@@ -443,6 +496,95 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
             )}
           </div>
         </CardContent>
+      </Card>
+
+      {/* Password Change Section */}
+      <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              <CardTitle className="text-gray-900">Security</CardTitle>
+            </div>
+            <Button
+              onClick={() => setShowPasswordSection(!showPasswordSection)}
+              variant="outline"
+              size="sm"
+              className="rounded-custom border-gray-300"
+            >
+              {showPasswordSection ? "Cancel" : "Change Password"}
+            </Button>
+          </div>
+        </CardHeader>
+        {showPasswordSection && (
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new_password" className="text-gray-700">
+                New Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="new_password"
+                  type={showPasswords.new ? "text" : "password"}
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary pr-10"
+                  placeholder="Enter new password (min 6 characters)"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                >
+                  {showPasswords.new ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm_password" className="text-gray-700">
+                Confirm New Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="confirm_password"
+                  type={showPasswords.confirm ? "text" : "password"}
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary pr-10"
+                  placeholder="Confirm new password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                >
+                  {showPasswords.confirm ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <Button
+              onClick={handlePasswordChange}
+              disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+              className="w-full bg-primary hover:bg-primary/90 rounded-custom"
+            >
+              {passwordLoading ? "Updating..." : "Update Password"}
+            </Button>
+          </CardContent>
+        )}
       </Card>
 
       {/* Nutrition Goals */}
