@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -18,20 +17,13 @@ import {
   Clock,
   ChefHat,
 } from "lucide-react"
-import { getMealEntriesForDate } from "@/lib/meal-logging"
+import { getMealEntriesForDate, getWeeklyMealSummary } from "@/lib/meal-logging"
+import { getWaterHistory } from "@/lib/water-logging"
 import { usePageTracking, trackEvent, ANALYTICS_EVENTS } from "@/lib/analytics"
+import { getISTDate } from "@/lib/timezone-utils"
 
 interface TrendsAnalyticsProps {
   userId: string
-}
-
-// Utility function to get IST date
-const getISTDate = (daysOffset = 0) => {
-  const date = new Date()
-  date.setDate(date.getDate() + daysOffset)
-  return date.toLocaleDateString("en-CA", {
-    timeZone: "Asia/Kolkata",
-  })
 }
 
 export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
@@ -41,6 +33,8 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
   const [totalMealsLogged, setTotalMealsLogged] = useState(0)
   const [daysWithData, setDaysWithData] = useState(0)
   const [todayMealsCount, setTodayMealsCount] = useState(0)
+  const [weeklyData, setWeeklyData] = useState<any[]>([])
+  const [waterData, setWaterData] = useState<any[]>([])
 
   useEffect(() => {
     checkUserData()
@@ -77,13 +71,34 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
       setDaysWithData(daysWithMeals)
       setTodayMealsCount(todayMeals)
 
-      // Consider user has meaningful data if they have logged meals on at least 3 days OR have logged meals today
-      setHasData(daysWithMeals >= 3 || (todayMeals > 0 && totalMeals >= 3))
+      // Consider user has meaningful data if they have logged meals on at least 3 days
+      const hasEnoughData = daysWithMeals >= 3
+      setHasData(hasEnoughData)
+
+      // If user has data, load actual trends
+      if (hasEnoughData) {
+        await loadActualTrends()
+      }
     } catch (error) {
       console.error("Error checking user data:", error)
       setHasData(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadActualTrends = async () => {
+    try {
+      // Load actual weekly data
+      const endDate = getISTDate()
+      const weeklyMeals = await getWeeklyMealSummary(userId, endDate)
+      setWeeklyData(weeklyMeals)
+
+      // Load water data
+      const waterHistory = await getWaterHistory(userId, 7)
+      setWaterData(waterHistory)
+    } catch (error) {
+      console.error("Error loading trends:", error)
     }
   }
 
@@ -299,34 +314,7 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
     )
   }
 
-  // Existing trends content for users with data
-  const weeklyData = [
-    { day: "Mon", calories: 1850, protein: 140, carbs: 200, fat: 60, completion: 92 },
-    { day: "Tue", calories: 2100, protein: 155, carbs: 250, fat: 70, completion: 98 },
-    { day: "Wed", calories: 1750, protein: 130, carbs: 180, fat: 55, completion: 87 },
-    { day: "Thu", calories: 2050, protein: 150, carbs: 240, fat: 68, completion: 95 },
-    { day: "Fri", calories: 1900, protein: 145, carbs: 210, fat: 62, completion: 90 },
-    { day: "Sat", calories: 2200, protein: 160, carbs: 260, fat: 75, completion: 100 },
-    { day: "Sun", calories: 1650, protein: 120, carbs: 180, fat: 45, completion: 85 },
-  ]
-
-  const monthlyStats = {
-    avgCalories: 1950,
-    avgProtein: 143,
-    avgCompletion: 92,
-    bestStreak: 12,
-    totalMealsLogged: totalMealsLogged,
-    favoriteFood: "Grilled Chicken",
-    mostActiveDay: "Saturday",
-  }
-
-  const nutritionTrends = [
-    { nutrient: "Calories", trend: "up", change: "+5%", status: "good" },
-    { nutrient: "Protein", trend: "up", change: "+12%", status: "excellent" },
-    { nutrient: "Carbs", trend: "down", change: "-3%", status: "good" },
-    { nutrient: "Fat", trend: "stable", change: "±1%", status: "good" },
-  ]
-
+  // Real trends content for users with actual data
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case "up":
@@ -361,98 +349,91 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
         </TabsList>
 
         <TabsContent value="weekly" className="space-y-6">
-          {/* Weekly Overview */}
+          {/* Weekly Overview with REAL data */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
                 This Week's Progress
               </CardTitle>
-              <CardDescription>Your nutrition tracking for the past 7 days</CardDescription>
+              <CardDescription>Your actual nutrition tracking for the past 7 days</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {weeklyData.map((day, index) => (
-                  <div key={day.day} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <p className="font-semibold">{day.day}</p>
-                        <p className="text-xs text-gray-600">Day {index + 1}</p>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium">Completion</span>
-                          <span className="text-sm">{day.completion}%</span>
+                {weeklyData.length > 0 ? (
+                  weeklyData.map((day, index) => (
+                    <div key={day.date} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <p className="font-semibold">
+                            {new Date(day.date).toLocaleDateString("en-US", { weekday: "short" })}
+                          </p>
+                          <p className="text-xs text-gray-600">{day.date}</p>
                         </div>
-                        <Progress value={day.completion} className="h-2" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium">Meals Logged</span>
+                            <span className="text-sm">{day.meal_count}</span>
+                          </div>
+                          <Progress value={Math.min((day.meal_count / 4) * 100, 100)} className="h-2" />
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{day.total_calories} cal</p>
+                        <p className="text-xs text-gray-600">
+                          P:{day.total_protein}g C:{day.total_carbs}g F:{day.total_fat}g
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{day.calories} cal</p>
-                      <p className="text-xs text-gray-600">
-                        P:{day.protein}g C:{day.carbs}g F:{day.fat}g
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Nutrition Trends */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Nutrition Trends
-              </CardTitle>
-              <CardDescription>How your nutrition has changed this week</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {nutritionTrends.map((item) => (
-                  <div key={item.nutrient} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      {getTrendIcon(item.trend)}
-                      <div>
-                        <p className="font-medium">{item.nutrient}</p>
-                        <p className="text-sm text-gray-600">{item.change} vs last week</p>
-                      </div>
-                    </div>
-                    <Badge className={getStatusColor(item.status)}>{item.status}</Badge>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 py-8">No data available for this week</p>
+                )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-6">
-          {/* Monthly Stats */}
+          {/* Monthly Stats with REAL data */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PieChart className="h-5 w-5" />
                 Monthly Overview
               </CardTitle>
-              <CardDescription>Your nutrition summary for this month</CardDescription>
+              <CardDescription>Your actual nutrition summary for this month</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{monthlyStats.avgCalories}</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {weeklyData.length > 0
+                      ? Math.round(weeklyData.reduce((sum, day) => sum + day.total_calories, 0) / weeklyData.length)
+                      : 0}
+                  </p>
                   <p className="text-sm text-gray-600">Avg Daily Calories</p>
                 </div>
                 <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{monthlyStats.avgProtein}g</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {weeklyData.length > 0
+                      ? Math.round(weeklyData.reduce((sum, day) => sum + day.total_protein, 0) / weeklyData.length)
+                      : 0}
+                    g
+                  </p>
                   <p className="text-sm text-gray-600">Avg Daily Protein</p>
                 </div>
                 <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">{monthlyStats.avgCompletion}%</p>
-                  <p className="text-sm text-gray-600">Avg Completion</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {weeklyData.length > 0
+                      ? Math.round((weeklyData.filter((day) => day.meal_count > 0).length / weeklyData.length) * 100)
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-sm text-gray-600">Days with Meals</p>
                 </div>
                 <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-orange-600">{monthlyStats.totalMealsLogged}</p>
+                  <p className="text-2xl font-bold text-orange-600">{totalMealsLogged}</p>
                   <p className="text-sm text-gray-600">Total Meals Logged</p>
                 </div>
               </div>
@@ -461,47 +442,55 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
-          {/* AI-Powered Insights */}
+          {/* Real insights based on actual data */}
           <Card className="bg-gradient-to-r from-purple-50 to-pink-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5" />
-                Personalized Insights
+                Your Personal Insights
               </CardTitle>
-              <CardDescription>AI-powered analysis of your nutrition patterns</CardDescription>
+              <CardDescription>Based on your actual nutrition tracking data</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="p-4 bg-white rounded-lg border-l-4 border-green-500">
-                  <h4 className="font-semibold text-green-700 mb-2">🎯 Goal Achievement</h4>
-                  <p className="text-sm text-gray-700">
-                    You've consistently hit your protein goals 85% of the time this month. This is excellent for your
-                    muscle building objectives!
-                  </p>
-                </div>
+                {daysWithData >= 7 ? (
+                  <>
+                    <div className="p-4 bg-white rounded-lg border-l-4 border-green-500">
+                      <h4 className="font-semibold text-green-700 mb-2">🎯 Consistency Achievement</h4>
+                      <p className="text-sm text-gray-700">
+                        Great job! You've been tracking for {daysWithData} days. This consistency will help you
+                        understand your eating patterns better.
+                      </p>
+                    </div>
 
-                <div className="p-4 bg-white rounded-lg border-l-4 border-blue-500">
-                  <h4 className="font-semibold text-blue-700 mb-2">📊 Pattern Recognition</h4>
-                  <p className="text-sm text-gray-700">
-                    You tend to log more complete meals on weekends. Consider setting weekday reminders to maintain
-                    consistency.
-                  </p>
-                </div>
+                    <div className="p-4 bg-white rounded-lg border-l-4 border-blue-500">
+                      <h4 className="font-semibold text-blue-700 mb-2">📊 Data Pattern</h4>
+                      <p className="text-sm text-gray-700">
+                        You've logged {totalMealsLogged} meals across {daysWithData} days. Your average is{" "}
+                        {Math.round((totalMealsLogged / daysWithData) * 10) / 10} meals per day.
+                      </p>
+                    </div>
 
-                <div className="p-4 bg-white rounded-lg border-l-4 border-orange-500">
-                  <h4 className="font-semibold text-orange-700 mb-2">⚡ Optimization Tip</h4>
-                  <p className="text-sm text-gray-700">
-                    Your calorie intake varies by 400+ calories daily. Try meal prepping to maintain more consistent
-                    energy levels.
-                  </p>
-                </div>
-
-                <div className="p-4 bg-white rounded-lg border-l-4 border-purple-500">
-                  <h4 className="font-semibold text-purple-700 mb-2">🔮 Prediction</h4>
-                  <p className="text-sm text-gray-700">
-                    Based on your current trends, you're on track to reach your monthly goals with 94% completion rate.
-                  </p>
-                </div>
+                    {weeklyData.length > 0 && (
+                      <div className="p-4 bg-white rounded-lg border-l-4 border-purple-500">
+                        <h4 className="font-semibold text-purple-700 mb-2">🔮 Weekly Trend</h4>
+                        <p className="text-sm text-gray-700">
+                          Your weekly average is{" "}
+                          {Math.round(weeklyData.reduce((sum, day) => sum + day.total_calories, 0) / weeklyData.length)}{" "}
+                          calories per day. Keep tracking to see more detailed patterns!
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="p-4 bg-white rounded-lg border-l-4 border-orange-500">
+                    <h4 className="font-semibold text-orange-700 mb-2">📈 Keep Going!</h4>
+                    <p className="text-sm text-gray-700">
+                      You're off to a great start with {daysWithData} days of tracking! Log meals for a few more days to
+                      unlock detailed insights and personalized recommendations.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
