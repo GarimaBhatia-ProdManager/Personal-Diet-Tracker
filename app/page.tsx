@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Camera, Mic, Plus, Target, LogOut, Zap, Flame, Droplets, Clock, Award, ChevronRight } from "lucide-react"
+import { Camera, Mic, Plus, LogOut, Zap, Flame, Droplets, Award } from "lucide-react"
 import MealLogger from "@/components/meal-logger"
 import TrendsAnalytics from "@/components/trends-analytics"
 import UserProfile from "@/components/user-profile"
@@ -25,10 +25,10 @@ export default function DietTrackerApp() {
   const [isListening, setIsListening] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [todayStats, setTodayStats] = useState({
-    calories: { consumed: 0, target: userProfile?.daily_calories || 2000 },
-    protein: { consumed: 0, target: userProfile?.daily_protein || 150 },
-    carbs: { consumed: 0, target: userProfile?.daily_carbs || 250 },
-    fat: { consumed: 0, target: userProfile?.daily_fat || 67 },
+    calories: { consumed: 0, target: 2000 },
+    protein: { consumed: 0, target: 150 },
+    carbs: { consumed: 0, target: 250 },
+    fat: { consumed: 0, target: 67 },
     water: { consumed: 5, target: 8 },
   })
 
@@ -89,7 +89,16 @@ export default function DietTrackerApp() {
       setUserProfile(profile)
       console.log("Profile loaded successfully:", profile)
 
-      await loadDailyStats()
+      // Update today's stats with profile targets
+      setTodayStats((prev) => ({
+        ...prev,
+        calories: { ...prev.calories, target: profile?.daily_calories || 2000 },
+        protein: { ...prev.protein, target: profile?.daily_protein || 150 },
+        carbs: { ...prev.carbs, target: profile?.daily_carbs || 250 },
+        fat: { ...prev.fat, target: profile?.daily_fat || 67 },
+      }))
+
+      await loadDailyStats(userId)
     } catch (error) {
       console.error("Error loading user profile:", error)
 
@@ -133,20 +142,18 @@ export default function DietTrackerApp() {
     setIsListening(!isListening)
   }
 
-  const loadDailyStats = async () => {
-    if (!user?.id) return
-
+  const loadDailyStats = async (userId: string) => {
     try {
       const today = new Date().toISOString().split("T")[0]
-      const summary = await getDailyNutritionSummary(user.id, today)
+      const summary = await getDailyNutritionSummary(userId, today)
 
-      setTodayStats({
-        calories: { consumed: summary.total_calories, target: userProfile?.daily_calories || 2000 },
-        protein: { consumed: summary.total_protein, target: userProfile?.daily_protein || 150 },
-        carbs: { consumed: summary.total_carbs, target: userProfile?.daily_carbs || 250 },
-        fat: { consumed: summary.total_fat, target: userProfile?.daily_fat || 67 },
+      setTodayStats((prev) => ({
+        calories: { consumed: summary.total_calories, target: prev.calories.target },
+        protein: { consumed: summary.total_protein, target: prev.protein.target },
+        carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
+        fat: { consumed: summary.total_fat, target: prev.fat.target },
         water: { consumed: 5, target: 8 }, // Keep water tracking separate for now
-      })
+      }))
     } catch (error) {
       console.error("Error loading daily stats:", error)
     }
@@ -265,183 +272,6 @@ export default function DietTrackerApp() {
           </div>
         </div>
 
-        {/* Animated Calorie Circle */}
-        <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center mb-4">
-              <div className="relative w-32 h-32">
-                <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="50" stroke="#E5E7EB" strokeWidth="8" fill="none" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    stroke="#00B74A"
-                    strokeWidth="8"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={`${calorieProgress * 3.14} 314`}
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-gray-900">{todayStats.calories.consumed}</span>
-                  <span className="text-xs text-gray-500">of {todayStats.calories.target}</span>
-                  <span className="text-xs text-gray-400">calories</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-semibold mb-1 text-gray-900">
-                {remaining > 0 ? `${remaining} calories left` : "Goal reached! 🎉"}
-              </p>
-              <p className="text-sm text-gray-600">{Math.round(calorieProgress)}% of daily goal</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
-            <CardContent className="p-4 text-center">
-              <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-              <p className="text-lg font-bold text-gray-900">
-                {todayStats.water.consumed}/{todayStats.water.target}
-              </p>
-              <p className="text-xs text-gray-500">glasses</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
-            <CardContent className="p-4 text-center">
-              <Zap className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
-              <p className="text-lg font-bold text-gray-900">{todayStats.protein.consumed}g</p>
-              <p className="text-xs text-gray-500">protein</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
-            <CardContent className="p-4 text-center">
-              <Award className="h-6 w-6 mx-auto mb-2 text-primary" />
-              <p className="text-lg font-bold text-gray-900">85%</p>
-              <p className="text-xs text-gray-500">complete</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Nutrition Pie Chart */}
-        <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-          <CardContent className="p-4">
-            <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
-              <Target className="h-5 w-5" />
-              Macro Breakdown
-            </h3>
-            <div className="flex items-center justify-center mb-4">
-              <div className="relative w-24 h-24">
-                <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="40" stroke="#E5E7EB" strokeWidth="8" fill="none" />
-                  {macroData.map((macro, index) => {
-                    const offset = macroData.slice(0, index).reduce((sum, m) => sum + m.percentage * 2.51, 0)
-                    return (
-                      <circle
-                        key={macro.name}
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        stroke={macro.color}
-                        strokeWidth="8"
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeDasharray={`${macro.percentage * 2.51} 251`}
-                        strokeDashoffset={-offset}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    )
-                  })}
-                </svg>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {macroData.map((macro) => (
-                <div key={macro.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }}></div>
-                    <span className="text-sm text-gray-700">{macro.name}</span>
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">{macro.value}g</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Add Foods */}
-        <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-          <CardContent className="p-4">
-            <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
-              <Flame className="h-5 w-5" />
-              Quick Add
-            </h3>
-            <div className="grid grid-cols-3 gap-3">
-              {quickAddFoods.map((food) => (
-                <Button
-                  key={food.name}
-                  variant="outline"
-                  className="h-auto p-3 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 rounded-custom"
-                  onClick={() => {
-                    console.log(`Added ${food.name}`)
-                  }}
-                >
-                  <span className="text-2xl">{food.emoji}</span>
-                  <span className="text-xs font-medium">{food.name}</span>
-                  <span className="text-xs text-gray-500">{food.calories} cal</span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Meals */}
-        <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold flex items-center gap-2 text-gray-900">
-                <Clock className="h-5 w-5" />
-                Today's Meals
-              </h3>
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-100 rounded-custom">
-                View All <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-custom">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">🥣</span>
-                  <div>
-                    <p className="font-medium text-sm text-gray-900">Breakfast</p>
-                    <p className="text-xs text-gray-500">Oatmeal with berries</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-sm text-gray-900">320 cal</p>
-                  <p className="text-xs text-gray-500">8:30 AM</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-custom">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">🥗</span>
-                  <div>
-                    <p className="font-medium text-sm text-gray-900">Lunch</p>
-                    <p className="text-xs text-gray-500">Caesar salad</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-sm text-gray-900">450 cal</p>
-                  <p className="text-xs text-gray-500">12:45 PM</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <TabsList className="grid w-full grid-cols-4 bg-gray-100 rounded-custom">
@@ -470,6 +300,96 @@ export default function DietTrackerApp() {
               Profile
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dashboard" className="mt-6">
+            {/* Animated Calorie Circle */}
+            <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="relative w-32 h-32">
+                    <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r="50" stroke="#E5E7EB" strokeWidth="8" fill="none" />
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="50"
+                        stroke="#00B74A"
+                        strokeWidth="8"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${calorieProgress * 3.14} 314`}
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-900">{todayStats.calories.consumed}</span>
+                      <span className="text-xs text-gray-500">of {todayStats.calories.target}</span>
+                      <span className="text-xs text-gray-400">calories</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold mb-1 text-gray-900">
+                    {remaining > 0 ? `${remaining} calories left` : "Goal reached! 🎉"}
+                  </p>
+                  <p className="text-sm text-gray-600">{Math.round(calorieProgress)}% of daily goal</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+                <CardContent className="p-4 text-center">
+                  <Droplets className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                  <p className="text-lg font-bold text-gray-900">
+                    {todayStats.water.consumed}/{todayStats.water.target}
+                  </p>
+                  <p className="text-xs text-gray-500">glasses</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+                <CardContent className="p-4 text-center">
+                  <Zap className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
+                  <p className="text-lg font-bold text-gray-900">{todayStats.protein.consumed}g</p>
+                  <p className="text-xs text-gray-500">protein</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+                <CardContent className="p-4 text-center">
+                  <Award className="h-6 w-6 mx-auto mb-2 text-primary" />
+                  <p className="text-lg font-bold text-gray-900">85%</p>
+                  <p className="text-xs text-gray-500">complete</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Add Foods */}
+            <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
+              <CardContent className="p-4">
+                <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
+                  <Flame className="h-5 w-5" />
+                  Quick Add
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {quickAddFoods.map((food) => (
+                    <Button
+                      key={food.name}
+                      variant="outline"
+                      className="h-auto p-3 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 rounded-custom"
+                      onClick={() => {
+                        console.log(`Added ${food.name}`)
+                      }}
+                    >
+                      <span className="text-2xl">{food.emoji}</span>
+                      <span className="text-xs font-medium">{food.name}</span>
+                      <span className="text-xs text-gray-500">{food.calories} cal</span>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="log" className="mt-6">
             <MealLogger userId={user.id} />

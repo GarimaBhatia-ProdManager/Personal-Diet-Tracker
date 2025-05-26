@@ -1,64 +1,87 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { User, Target, Settings, Save } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import type { User as AuthUser } from "@supabase/supabase-js"
+import type { UserProfileType } from "@/lib/supabase"
 
 interface UserProfileProps {
-  goals: {
-    calories: number
-    protein: number
-    carbs: number
-    fat: number
-    goal: string
-  }
-  onGoalsUpdate: (goals: any) => void
+  user: AuthUser
+  userProfile: UserProfileType
+  onProfileUpdate: (profile: UserProfileType) => void
 }
 
-export default function UserProfile({ goals, onGoalsUpdate }: UserProfileProps) {
-  const [profile, setProfile] = useState({
-    name: "Alex Johnson",
-    email: "alex@example.com",
-    age: 28,
-    height: 175,
-    weight: 70,
-    activityLevel: "moderate",
-    dietaryRestrictions: "none",
+export default function UserProfile({ user, userProfile, onProfileUpdate }: UserProfileProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  const [formData, setFormData] = useState({
+    full_name: userProfile?.full_name || "",
+    age: userProfile?.age || "",
+    height: userProfile?.height || "",
+    weight: userProfile?.weight || "",
+    activity_level: userProfile?.activity_level || "moderate",
+    goal_type: userProfile?.goal_type || "maintenance",
+    dietary_restrictions: userProfile?.dietary_restrictions || "",
+    daily_calories: userProfile?.daily_calories || 2000,
+    daily_protein: userProfile?.daily_protein || 150,
+    daily_carbs: userProfile?.daily_carbs || 250,
+    daily_fat: userProfile?.daily_fat || 67,
   })
 
-  const [editedGoals, setEditedGoals] = useState(goals)
-  const [isEditing, setIsEditing] = useState(false)
+  useEffect(() => {
+    if (userProfile) {
+      setFormData({
+        full_name: userProfile.full_name || "",
+        age: userProfile.age || "",
+        height: userProfile.height || "",
+        weight: userProfile.weight || "",
+        activity_level: userProfile.activity_level || "moderate",
+        goal_type: userProfile.goal_type || "maintenance",
+        dietary_restrictions: userProfile.dietary_restrictions || "",
+        daily_calories: userProfile.daily_calories || 2000,
+        daily_protein: userProfile.daily_protein || 150,
+        daily_carbs: userProfile.daily_carbs || 250,
+        daily_fat: userProfile.daily_fat || 67,
+      })
+    }
+  }, [userProfile])
 
-  const activityLevels = [
-    { value: "sedentary", label: "Sedentary (little/no exercise)" },
-    { value: "light", label: "Light (light exercise 1-3 days/week)" },
-    { value: "moderate", label: "Moderate (moderate exercise 3-5 days/week)" },
-    { value: "active", label: "Active (hard exercise 6-7 days/week)" },
-    { value: "very-active", label: "Very Active (very hard exercise, physical job)" },
-  ]
+  // Calculate TDEE based on profile data
+  const calculateTDEE = (weight: number, height: number, age: number, activityLevel: string) => {
+    // Mifflin-St Jeor Equation (assuming male for simplicity)
+    const bmr = 10 * weight + 6.25 * height - 5 * age + 5
 
-  const goalTypes = [
-    { value: "weight-loss", label: "Weight Loss", description: "Reduce body weight gradually" },
-    { value: "muscle-gain", label: "Muscle Gain", description: "Build lean muscle mass" },
-    { value: "maintenance", label: "Maintenance", description: "Maintain current weight" },
-    { value: "bulking", label: "Bulking", description: "Gain weight and muscle" },
-    { value: "cutting", label: "Cutting", description: "Reduce body fat while preserving muscle" },
-  ]
+    const activityMultipliers = {
+      sedentary: 1.2,
+      light: 1.375,
+      moderate: 1.55,
+      active: 1.725,
+      "very-active": 1.9,
+    }
 
+    return Math.round(bmr * (activityMultipliers[activityLevel as keyof typeof activityMultipliers] || 1.55))
+  }
+
+  // Calculate macros based on goal type
   const calculateMacros = (calories: number, goalType: string) => {
     let proteinRatio, carbRatio, fatRatio
 
     switch (goalType) {
       case "weight-loss":
         proteinRatio = 0.35
-        carbRatio = 0.3
-        fatRatio = 0.35
+        carbRatio = 0.35
+        fatRatio = 0.3
         break
       case "muscle-gain":
         proteinRatio = 0.3
@@ -72,10 +95,10 @@ export default function UserProfile({ goals, onGoalsUpdate }: UserProfileProps) 
         break
       case "cutting":
         proteinRatio = 0.4
-        carbRatio = 0.25
-        fatRatio = 0.35
+        carbRatio = 0.3
+        fatRatio = 0.3
         break
-      default:
+      default: // maintenance
         proteinRatio = 0.3
         carbRatio = 0.4
         fatRatio = 0.3
@@ -88,288 +111,350 @@ export default function UserProfile({ goals, onGoalsUpdate }: UserProfileProps) 
     }
   }
 
-  const handleGoalTypeChange = (newGoalType: string) => {
-    const macros = calculateMacros(editedGoals.calories, newGoalType)
-    setEditedGoals({
-      ...editedGoals,
-      goal: newGoalType,
-      ...macros,
-    })
+  const updateCalculatedValues = (newFormData: any) => {
+    const weight = Number.parseFloat(newFormData.weight) || 70
+    const height = Number.parseFloat(newFormData.height) || 170
+    const age = Number.parseInt(newFormData.age) || 25
+
+    const tdee = calculateTDEE(weight, height, age, newFormData.activity_level)
+
+    let targetCalories = tdee
+    switch (newFormData.goal_type) {
+      case "weight-loss":
+        targetCalories = Math.round(tdee * 0.8)
+        break
+      case "muscle-gain":
+        targetCalories = Math.round(tdee * 1.1)
+        break
+      case "bulking":
+        targetCalories = Math.round(tdee * 1.2)
+        break
+      case "cutting":
+        targetCalories = Math.round(tdee * 0.75)
+        break
+      default:
+        targetCalories = tdee
+    }
+
+    const macros = calculateMacros(targetCalories, newFormData.goal_type)
+
+    return {
+      ...newFormData,
+      daily_calories: targetCalories,
+      daily_protein: macros.protein,
+      daily_carbs: macros.carbs,
+      daily_fat: macros.fat,
+    }
   }
 
-  const handleCaloriesChange = (newCalories: number) => {
-    const macros = calculateMacros(newCalories, editedGoals.goal)
-    setEditedGoals({
-      ...editedGoals,
-      calories: newCalories,
-      ...macros,
-    })
+  const handleInputChange = (field: string, value: string | number) => {
+    const newFormData = { ...formData, [field]: value }
+
+    if (["weight", "height", "age", "activity_level", "goal_type"].includes(field)) {
+      const updatedData = updateCalculatedValues(newFormData)
+      setFormData(updatedData)
+    } else {
+      setFormData(newFormData)
+    }
   }
 
-  const saveChanges = () => {
-    onGoalsUpdate(editedGoals)
+  const handleSave = async () => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const { data, error: updateError } = await supabase
+        .from("user_profiles")
+        .update({
+          full_name: formData.full_name,
+          age: Number.parseInt(formData.age) || null,
+          height: Number.parseFloat(formData.height) || null,
+          weight: Number.parseFloat(formData.weight) || null,
+          activity_level: formData.activity_level,
+          goal_type: formData.goal_type,
+          dietary_restrictions: formData.dietary_restrictions,
+          daily_calories: formData.daily_calories,
+          daily_protein: formData.daily_protein,
+          daily_carbs: formData.daily_carbs,
+          daily_fat: formData.daily_fat,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+
+      onProfileUpdate(data)
+      setIsEditing(false)
+      setSuccess("Profile updated successfully!")
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err: any) {
+      setError(err.message || "Failed to update profile")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setFormData({
+      full_name: userProfile?.full_name || "",
+      age: userProfile?.age || "",
+      height: userProfile?.height || "",
+      weight: userProfile?.weight || "",
+      activity_level: userProfile?.activity_level || "moderate",
+      goal_type: userProfile?.goal_type || "maintenance",
+      dietary_restrictions: userProfile?.dietary_restrictions || "",
+      daily_calories: userProfile?.daily_calories || 2000,
+      daily_protein: userProfile?.daily_protein || 150,
+      daily_carbs: userProfile?.daily_carbs || 250,
+      daily_fat: userProfile?.daily_fat || 67,
+    })
     setIsEditing(false)
+    setError(null)
+    setSuccess(null)
   }
 
   return (
     <div className="space-y-6">
-      {/* Profile Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Profile Information
-          </CardTitle>
-          <CardDescription>Your personal information and preferences</CardDescription>
+      {/* Success/Error Messages */}
+      {error && <div className="bg-red-50 border border-red-200 rounded-custom p-4 text-red-800">{error}</div>}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-custom p-4 text-green-800">{success}</div>
+      )}
+
+      {/* Personal Information */}
+      <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <CardTitle className="text-gray-900">Personal Information</CardTitle>
+            </div>
+            {!isEditing ? (
+              <Button
+                onClick={() => setIsEditing(true)}
+                variant="outline"
+                size="sm"
+                className="rounded-custom border-gray-300"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSave}
+                  size="sm"
+                  disabled={loading}
+                  className="bg-primary hover:bg-primary/90 rounded-custom"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {loading ? "Saving..." : "Save"}
+                </Button>
+                <Button onClick={handleCancel} variant="outline" size="sm" className="rounded-custom border-gray-300">
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-              />
+              <Label htmlFor="full_name" className="text-gray-700">
+                Full Name
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => handleInputChange("full_name", e.target.value)}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
+                />
+              ) : (
+                <p className="text-gray-900 font-medium">{formData.full_name || "Not set"}</p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-              />
+              <Label htmlFor="age" className="text-gray-700 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Age
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="age"
+                  type="number"
+                  value={formData.age}
+                  onChange={(e) => handleInputChange("age", e.target.value)}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
+                  placeholder="25"
+                />
+              ) : (
+                <p className="text-gray-900 font-medium">{formData.age ? `${formData.age} years` : "Not set"}</p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="age">Age</Label>
-              <Input
-                id="age"
-                type="number"
-                value={profile.age}
-                onChange={(e) => setProfile({ ...profile, age: Number.parseInt(e.target.value) })}
-              />
+              <Label htmlFor="height" className="text-gray-700 flex items-center gap-2">
+                <Ruler className="h-4 w-4" />
+                Height (cm)
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="height"
+                  type="number"
+                  value={formData.height}
+                  onChange={(e) => handleInputChange("height", e.target.value)}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
+                  placeholder="170"
+                />
+              ) : (
+                <p className="text-gray-900 font-medium">{formData.height ? `${formData.height} cm` : "Not set"}</p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="height">Height (cm)</Label>
-              <Input
-                id="height"
-                type="number"
-                value={profile.height}
-                onChange={(e) => setProfile({ ...profile, height: Number.parseInt(e.target.value) })}
-              />
+              <Label htmlFor="weight" className="text-gray-700 flex items-center gap-2">
+                <Scale className="h-4 w-4" />
+                Weight (kg)
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="weight"
+                  type="number"
+                  value={formData.weight}
+                  onChange={(e) => handleInputChange("weight", e.target.value)}
+                  className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
+                  placeholder="70"
+                />
+              ) : (
+                <p className="text-gray-900 font-medium">{formData.weight ? `${formData.weight} kg` : "Not set"}</p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="weight">Weight (kg)</Label>
-              <Input
-                id="weight"
-                type="number"
-                value={profile.weight}
-                onChange={(e) => setProfile({ ...profile, weight: Number.parseInt(e.target.value) })}
-              />
+              <Label htmlFor="activity_level" className="text-gray-700 flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Activity Level
+              </Label>
+              {isEditing ? (
+                <Select
+                  value={formData.activity_level}
+                  onValueChange={(value) => handleInputChange("activity_level", value)}
+                >
+                  <SelectTrigger className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-custom">
+                    <SelectItem value="sedentary">Sedentary</SelectItem>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="moderate">Moderate</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="very-active">Very Active</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-gray-900 font-medium">
+                  {formData.activity_level.charAt(0).toUpperCase() + formData.activity_level.slice(1)}
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="activity">Activity Level</Label>
-              <Select
-                value={profile.activityLevel}
-                onValueChange={(value) => setProfile({ ...profile, activityLevel: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {activityLevels.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="goal_type" className="text-gray-700 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Goal Type
+              </Label>
+              {isEditing ? (
+                <Select value={formData.goal_type} onValueChange={(value) => handleInputChange("goal_type", value)}>
+                  <SelectTrigger className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-custom">
+                    <SelectItem value="weight-loss">Weight Loss</SelectItem>
+                    <SelectItem value="muscle-gain">Muscle Gain</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="bulking">Bulking</SelectItem>
+                    <SelectItem value="cutting">Cutting</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge className="bg-primary text-white rounded-custom">
+                  {formData.goal_type.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                </Badge>
+              )}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="dietary_restrictions" className="text-gray-700 flex items-center gap-2">
+              <Heart className="h-4 w-4" />
+              Dietary Restrictions
+            </Label>
+            {isEditing ? (
+              <Textarea
+                id="dietary_restrictions"
+                value={formData.dietary_restrictions}
+                onChange={(e) => handleInputChange("dietary_restrictions", e.target.value)}
+                className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
+                placeholder="e.g., Vegetarian, Gluten-free, Nut allergies..."
+                rows={3}
+              />
+            ) : (
+              <p className="text-gray-900">{formData.dietary_restrictions || "None specified"}</p>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Nutrition Goals */}
-      <Card>
+      <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Nutrition Goals
-              </CardTitle>
-              <CardDescription>Set your daily nutrition targets</CardDescription>
-            </div>
-            <Button
-              variant={isEditing ? "default" : "outline"}
-              onClick={() => (isEditing ? saveChanges() : setIsEditing(true))}
-            >
-              {isEditing ? (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Changes
-                </>
-              ) : (
-                <>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Edit Goals
-                </>
-              )}
-            </Button>
-          </div>
+          <CardTitle className="text-gray-900 flex items-center gap-2">
+            <Target className="h-5 w-5 text-primary" />
+            Daily Nutrition Goals
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            Automatically calculated based on your profile and goals
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {/* Goal Type Selection */}
-            <div className="space-y-3">
-              <Label>Primary Goal</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {goalTypes.map((goalType) => (
-                  <div
-                    key={goalType.value}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      editedGoals.goal === goalType.value
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    } ${!isEditing ? "pointer-events-none" : ""}`}
-                    onClick={() => isEditing && handleGoalTypeChange(goalType.value)}
-                  >
-                    <h4 className="font-semibold">{goalType.label}</h4>
-                    <p className="text-sm text-gray-600">{goalType.description}</p>
-                  </div>
-                ))}
-              </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-gray-50 rounded-custom">
+              <p className="text-2xl font-bold text-gray-900">{formData.daily_calories}</p>
+              <p className="text-sm text-gray-600">Calories</p>
             </div>
-
-            {/* Macro Targets */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h4 className="font-semibold">Daily Targets</h4>
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="calories">Calories</Label>
-                    <Input
-                      id="calories"
-                      type="number"
-                      value={editedGoals.calories}
-                      onChange={(e) => handleCaloriesChange(Number.parseInt(e.target.value))}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="protein">Protein (g)</Label>
-                    <Input
-                      id="protein"
-                      type="number"
-                      value={editedGoals.protein}
-                      onChange={(e) => setEditedGoals({ ...editedGoals, protein: Number.parseInt(e.target.value) })}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="carbs">Carbohydrates (g)</Label>
-                    <Input
-                      id="carbs"
-                      type="number"
-                      value={editedGoals.carbs}
-                      onChange={(e) => setEditedGoals({ ...editedGoals, carbs: Number.parseInt(e.target.value) })}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fat">Fat (g)</Label>
-                    <Input
-                      id="fat"
-                      type="number"
-                      value={editedGoals.fat}
-                      onChange={(e) => setEditedGoals({ ...editedGoals, fat: Number.parseInt(e.target.value) })}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold">Macro Distribution</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Protein</span>
-                    <Badge variant="outline">
-                      {Math.round(((editedGoals.protein * 4) / editedGoals.calories) * 100)}%
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Carbohydrates</span>
-                    <Badge variant="outline">
-                      {Math.round(((editedGoals.carbs * 4) / editedGoals.calories) * 100)}%
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Fat</span>
-                    <Badge variant="outline">{Math.round(((editedGoals.fat * 9) / editedGoals.calories) * 100)}%</Badge>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <h5 className="font-medium mb-2">Calculated BMR</h5>
-                  <p className="text-sm text-gray-600">
-                    Based on your profile: ~
-                    {Math.round(88.362 + 13.397 * profile.weight + 4.799 * profile.height - 5.677 * profile.age)}{" "}
-                    calories/day
-                  </p>
-                </div>
-              </div>
+            <div className="text-center p-4 bg-blue-50 rounded-custom">
+              <p className="text-2xl font-bold text-blue-600">{formData.daily_protein}g</p>
+              <p className="text-sm text-gray-600">Protein</p>
+            </div>
+            <div className="text-center p-4 bg-yellow-50 rounded-custom">
+              <p className="text-2xl font-bold text-yellow-600">{formData.daily_carbs}g</p>
+              <p className="text-sm text-gray-600">Carbs</p>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-custom">
+              <p className="text-2xl font-bold text-red-600">{formData.daily_fat}g</p>
+              <p className="text-sm text-gray-600">Fat</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Preferences & Settings</CardTitle>
-          <CardDescription>Customize your tracking experience</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="dietary-restrictions">Dietary Restrictions</Label>
-              <Textarea
-                id="dietary-restrictions"
-                placeholder="e.g., Vegetarian, Gluten-free, Lactose intolerant..."
-                value={profile.dietaryRestrictions}
-                onChange={(e) => setProfile({ ...profile, dietaryRestrictions: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Reminder Notifications</Label>
-                <Select defaultValue="enabled">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="enabled">Enabled</SelectItem>
-                    <SelectItem value="disabled">Disabled</SelectItem>
-                    <SelectItem value="custom">Custom Times</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Units</Label>
-                <Select defaultValue="metric">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="metric">Metric (kg, cm)</SelectItem>
-                    <SelectItem value="imperial">Imperial (lbs, ft)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="mt-4 text-sm text-gray-600 space-y-1">
+            <p>
+              <strong>Macro Distribution:</strong>{" "}
+              {Math.round(((formData.daily_protein * 4) / formData.daily_calories) * 100)}% Protein,{" "}
+              {Math.round(((formData.daily_carbs * 4) / formData.daily_calories) * 100)}% Carbs,{" "}
+              {Math.round(((formData.daily_fat * 9) / formData.daily_calories) * 100)}% Fat
+            </p>
+            <p>
+              <strong>Goal:</strong> {formData.goal_type.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+            </p>
           </div>
         </CardContent>
       </Card>
