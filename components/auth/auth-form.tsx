@@ -52,11 +52,21 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     }
 
     try {
-      await signUp(signUpData.email, signUpData.password, signUpData.fullName)
-      setSuccess("Account created successfully! Please check your email to verify your account.")
+      const result = await signUp(signUpData.email, signUpData.password, signUpData.fullName)
+
+      if (result.user && !result.user.email_confirmed_at) {
+        setSuccess("Account created successfully! Please check your email to verify your account before signing in.")
+      } else {
+        setSuccess("Account created successfully! You can now sign in.")
+      }
+
       setSignUpData({ email: "", password: "", confirmPassword: "", fullName: "" })
     } catch (err: any) {
-      setError(err.message || "Failed to create account")
+      if (err.message.includes("already registered")) {
+        setError("An account with this email already exists. Please sign in instead.")
+      } else {
+        setError(err.message || "Failed to create account")
+      }
     } finally {
       setIsLoading(false)
     }

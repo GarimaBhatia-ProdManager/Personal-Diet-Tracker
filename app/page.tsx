@@ -14,7 +14,7 @@ import UserProfile from "@/components/user-profile"
 import FeedbackCollection from "@/components/feedback-collection"
 import AuthForm from "@/components/auth/auth-form"
 import { supabase } from "@/lib/supabase"
-import { getCurrentUser, getUserProfile, signOut } from "@/lib/auth"
+import { getCurrentUser, getUserProfile, signOut, ensureUserProfile } from "@/lib/auth"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
 
@@ -55,6 +55,17 @@ export default function DietTrackerApp() {
       setUserProfile(profile)
     } catch (error) {
       console.error("Error loading user profile:", error)
+
+      // If profile doesn't exist, try to create it
+      if (user?.user_metadata?.full_name || user?.email) {
+        try {
+          await ensureUserProfile(userId, user.user_metadata?.full_name || user.email?.split("@")[0] || "User")
+          const profile = await getUserProfile(userId)
+          setUserProfile(profile)
+        } catch (createError) {
+          console.error("Error creating user profile:", createError)
+        }
+      }
     }
   }
 
