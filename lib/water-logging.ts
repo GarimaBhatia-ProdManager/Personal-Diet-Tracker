@@ -1,25 +1,28 @@
 import { supabase } from "./supabase"
+import { getISTDateTime, getISTDate } from "./timezone-utils"
 
 export interface WaterEntry {
   id: string
   user_id: string
   glasses_consumed: number
-  date: string
-  created_at: string
-  updated_at: string
+  ist_date: string // YYYY-MM-DD in IST
+  logged_at: string // UTC timestamp when last updated
+  created_at: string // UTC timestamp
+  updated_at: string // UTC timestamp
 }
 
-// Log or update water intake for a specific date
-export async function logWaterIntake(userId: string, glasses: number, date?: string): Promise<WaterEntry | null> {
+// Log or update water intake for a specific IST date
+export async function logWaterIntake(userId: string, glasses: number, istDate?: string): Promise<WaterEntry | null> {
   try {
-    const targetDate = date || new Date().toISOString().split("T")[0]
+    const targetDate = istDate || getISTDate()
+    const now = getISTDateTime()
 
-    // Check if entry exists for today
+    // Check if entry exists for the IST date
     const { data: existingEntry } = await supabase
       .from("water_entries")
       .select("*")
       .eq("user_id", userId)
-      .eq("date", targetDate)
+      .eq("ist_date", targetDate)
       .maybeSingle()
 
     if (existingEntry) {
@@ -28,7 +31,8 @@ export async function logWaterIntake(userId: string, glasses: number, date?: str
         .from("water_entries")
         .update({
           glasses_consumed: glasses,
-          updated_at: new Date().toISOString(),
+          logged_at: now,
+          updated_at: now,
         })
         .eq("id", existingEntry.id)
         .select()
@@ -44,7 +48,8 @@ export async function logWaterIntake(userId: string, glasses: number, date?: str
           {
             user_id: userId,
             glasses_consumed: glasses,
-            date: targetDate,
+            ist_date: targetDate,
+            logged_at: now,
           },
         ])
         .select()
@@ -59,16 +64,16 @@ export async function logWaterIntake(userId: string, glasses: number, date?: str
   }
 }
 
-// Get water intake for a specific date
-export async function getWaterIntake(userId: string, date?: string): Promise<number> {
+// Get water intake for a specific IST date
+export async function getWaterIntake(userId: string, istDate?: string): Promise<number> {
   try {
-    const targetDate = date || new Date().toISOString().split("T")[0]
+    const targetDate = istDate || getISTDate()
 
     const { data, error } = await supabase
       .from("water_entries")
       .select("glasses_consumed")
       .eq("user_id", userId)
-      .eq("date", targetDate)
+      .eq("ist_date", targetDate)
       .maybeSingle()
 
     if (error) throw error
@@ -79,25 +84,43 @@ export async function getWaterIntake(userId: string, date?: string): Promise<num
   }
 }
 
-// Get water intake history for multiple days
+// Get water intake history for multiple IST dates
 export async function getWaterHistory(userId: string, days = 7): Promise<WaterEntry[]> {
   try {
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setDate(endDate.getDate() - days)
+    const endDate = getISTDate()
+    const startDate = getISTDate(-days + 1)
 
     const { data, error } = await supabase
       .from("water_entries")
       .select("*")
       .eq("user_id", userId)
-      .gte("date", startDate.toISOString().split("T")[0])
-      .lte("date", endDate.toISOString().split("T")[0])
-      .order("date", { ascending: false })
+      .gte("ist_date", startDate)
+      .lte("ist_date", endDate)
+      .order("ist_date", { ascending: false })
 
     if (error) throw error
     return data || []
   } catch (error) {
     console.error("Error getting water history:", error)
+    return []
+  }
+}
+
+// Get water intake for a date range
+export async function getWaterIntakeRange(userId: string, startDate: string, endDate: string): Promise<WaterEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("water_entries")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("ist_date", startDate)
+      .lte("ist_date", endDate)
+      .order("ist_date", { ascending: true })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error("Error getting water intake range:", error)
     return []
   }
 }

@@ -14,6 +14,7 @@ import { getDailyNutritionSummary } from "@/lib/actions/nutrition-actions"
 import { getMealEntriesForDate } from "@/lib/meal-logging"
 import { logWaterIntake, getWaterIntake } from "@/lib/water-logging"
 import { analytics, sessionManager, trackAuthEvent, usePageTracking, useTimeTracking } from "@/lib/analytics"
+import { getISTDate } from "@/lib/timezone-utils"
 import React from "react"
 import { ClientProviders } from "@/components/client-providers"
 
@@ -30,19 +31,6 @@ const ComponentLoader = () => (
     <div className="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
   </div>
 )
-
-// Utility function to get IST time
-const getISTTime = () => {
-  return new Date().toLocaleString("en-US", {
-    timeZone: "Asia/Kolkata",
-  })
-}
-
-const getISTDate = () => {
-  return new Date().toLocaleDateString("en-CA", {
-    timeZone: "Asia/Kolkata",
-  })
-}
 
 const getTimeBasedGreeting = () => {
   const istTime = new Date().toLocaleString("en-US", {
@@ -79,7 +67,6 @@ export default function DietTrackerApp() {
   })
   const [waterGlasses, setWaterGlasses] = useState(0)
   const [userStreak, setUserStreak] = useState(0)
-  const [isLoadingStreak, setIsLoadingStreak] = useState(false) // Changed to false initially
   const [timeBasedGreeting, setTimeBasedGreeting] = useState(getTimeBasedGreeting())
 
   // Analytics tracking
@@ -155,7 +142,7 @@ export default function DietTrackerApp() {
       analytics.trackWaterGoalAchieved(newCount)
     }
 
-    // Save to database
+    // Save to database with IST date
     if (user?.id) {
       await logWaterIntake(user.id, newCount, getISTDate())
     }
@@ -171,7 +158,7 @@ export default function DietTrackerApp() {
         water: { consumed: newCount, target: 8 },
       }))
 
-      // Save to database
+      // Save to database with IST date
       if (user?.id) {
         await logWaterIntake(user.id, newCount, getISTDate())
       }
@@ -182,16 +169,13 @@ export default function DietTrackerApp() {
     // Don't block UI, calculate in background
     try {
       let streak = 0
-      const today = new Date()
-
-      // Convert to IST for accurate date calculation
-      const istToday = new Date(today.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+      const today = getISTDate()
 
       // Check backwards from today (limit to 7 days for performance)
       for (let i = 0; i < 7; i++) {
-        const checkDate = new Date(istToday)
-        checkDate.setDate(istToday.getDate() - i)
-        const dateString = checkDate.toISOString().split("T")[0]
+        const checkDate = new Date(today)
+        checkDate.setDate(checkDate.getDate() - i)
+        const dateString = checkDate.toLocaleDateString("en-CA")
 
         const meals = await getMealEntriesForDate(userId, dateString)
 
@@ -410,6 +394,7 @@ export default function DietTrackerApp() {
                 {timeBasedGreeting.greeting} {timeBasedGreeting.emoji}
               </h1>
               <p className="text-gray-600 text-sm">{displayProfile?.full_name || "Nutrition Explorer"}</p>
+              <p className="text-gray-500 text-xs">IST: {getISTDate()}</p>
             </div>
             <div className="flex items-center gap-2">
               {/* Dynamic Streak Badge - Only show if user has a streak */}

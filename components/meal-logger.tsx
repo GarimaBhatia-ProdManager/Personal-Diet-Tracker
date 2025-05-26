@@ -12,6 +12,7 @@ import { Plus, Search, Clock, Utensils, Sparkles, Zap, Loader2, Trash2, Database
 import { searchFoodsSimple, type NormalizedFood } from "@/lib/food-apis"
 import { logMealEntry, getMealEntriesForDate, deleteMealEntry, type MealEntry } from "@/lib/meal-logging"
 import { analytics, trackEvent, ANALYTICS_EVENTS } from "@/lib/analytics"
+import { getISTDate, formatISTTimeOnly } from "@/lib/timezone-utils"
 
 interface MealLoggerProps {
   userId: string
@@ -89,7 +90,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
   const loadTodayMeals = async () => {
     setIsLoading(true)
     try {
-      const today = new Date().toISOString().split("T")[0]
+      const today = getISTDate()
       const meals = await getMealEntriesForDate(userId, today)
       setTodayMeals(meals)
     } catch (error) {
@@ -446,7 +447,9 @@ export default function MealLogger({ userId }: MealLoggerProps) {
             <Utensils className="h-5 w-5" />
             Today's Meals
           </CardTitle>
-          <CardDescription className="text-gray-600">Your logged meals and nutrition progress</CardDescription>
+          <CardDescription className="text-gray-600">
+            Your logged meals and nutrition progress for {getISTDate()}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -511,10 +514,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
                                 <p className="text-sm font-semibold text-gray-900">{meal.calories} cal</p>
                                 <div className="flex gap-1 text-xs text-gray-500">
                                   <Clock className="h-3 w-3" />
-                                  {new Date(meal.logged_at).toLocaleTimeString("en-US", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
+                                  {formatISTTimeOnly(meal.logged_at)}
                                 </div>
                               </div>
                               <Button
@@ -554,6 +554,9 @@ export default function MealLogger({ userId }: MealLoggerProps) {
                 </p>
                 <p>
                   • <strong>Accurate Tracking:</strong> Detailed macronutrient and calorie information
+                </p>
+                <p>
+                  • <strong>IST Timezone:</strong> All timestamps are properly handled for Indian Standard Time
                 </p>
               </div>
             </div>

@@ -52,15 +52,24 @@ export class SecureUserback {
     this.isLoading = true
 
     try {
-      // Get configuration from server
+      // Get configuration from server (without token exposure)
       const result = await getUserbackConfig(userId)
 
-      if (!result.success || !result.token) {
+      if (!result.success || !result.hasToken) {
         console.warn("Userback not available, will use fallback")
         return false
       }
 
-      this.token = result.token
+      // Get the token directly from environment on client side
+      // This is safe because NEXT_PUBLIC_ variables are meant to be public
+      const clientToken = process.env.NEXT_PUBLIC_USERBACK_TOKEN
+
+      if (!clientToken) {
+        console.warn("Userback token not available on client")
+        return false
+      }
+
+      this.token = clientToken
 
       // Initialize Userback queue
       this.initializeUserbackQueue()
@@ -77,7 +86,7 @@ export class SecureUserback {
       }
 
       // Configure Userback
-      this.configureUserback(result.token)
+      this.configureUserback(clientToken)
 
       // Wait for Userback to be ready (with graceful timeout handling)
       try {

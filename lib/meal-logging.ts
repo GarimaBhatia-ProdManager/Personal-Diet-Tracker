@@ -1,5 +1,6 @@
 import { supabase } from "./supabase"
 import type { NormalizedFood } from "./food-apis"
+import { getISTDateTime } from "./timezone-utils"
 
 export interface MealEntry {
   id: string
@@ -17,10 +18,12 @@ export interface MealEntry {
   fiber?: number
   sugar?: number
   sodium?: number
-  logged_at: string
-  created_at: string
+  logged_at: string // UTC timestamp
+  created_at: string // UTC timestamp
   food_source: "usda" | "openfoodfacts" | "local" | "custom"
   food_image?: string
+  // IST date for easy querying
+  ist_date: string // YYYY-MM-DD in IST
 }
 
 export interface DailyNutritionSummary {
@@ -41,15 +44,24 @@ export interface DailyNutritionSummary {
   }
 }
 
-// Log a meal entry
+// Log a meal entry with proper IST handling
 export async function logMealEntry(
   userId: string,
   food: NormalizedFood,
   mealType: "breakfast" | "lunch" | "dinner" | "snack",
   servingSize = 1,
   servingUnit = "serving",
+  customLoggedAt?: string, // Optional custom timestamp
 ): Promise<MealEntry | null> {
   try {
+    const now = getISTDateTime()
+    const loggedAt = customLoggedAt || now
+
+    // Get IST date for the logged timestamp
+    const istDate = new Date(loggedAt).toLocaleDateString("en-CA", {
+      timeZone: "Asia/Kolkata",
+    })
+
     const mealEntry: Omit<MealEntry, "id" | "created_at"> = {
       user_id: userId,
       food_id: food.id,
@@ -65,9 +77,10 @@ export async function logMealEntry(
       fiber: food.fiber ? Math.round(food.fiber * servingSize * 10) / 10 : undefined,
       sugar: food.sugar ? Math.round(food.sugar * servingSize * 10) / 10 : undefined,
       sodium: food.sodium ? Math.round(food.sodium * servingSize * 1000) / 1000 : undefined,
-      logged_at: new Date().toISOString(),
+      logged_at: loggedAt,
       food_source: food.source,
       food_image: food.image,
+      ist_date: istDate,
     }
 
     const { data, error } = await supabase.from("meal_entries").insert([mealEntry]).select().single()
@@ -84,21 +97,15 @@ export async function logMealEntry(
   }
 }
 
-// Get meal entries for a specific date
-export async function getMealEntriesForDate(userId: string, date: string): Promise<MealEntry[]> {
+// Get meal entries for a specific IST date
+export async function getMealEntriesForDate(userId: string, istDate: string): Promise<MealEntry[]> {
   try {
-    const startOfDay = new Date(date)
-    startOfDay.setHours(0, 0, 0, 0)
-
-    const endOfDay = new Date(date)
-    endOfDay.setHours(23, 59, 59, 999)
-
+    // Use the IST date column for efficient querying
     const { data, error } = await supabase
       .from("meal_entries")
       .select("*")
       .eq("user_id", userId)
-      .gte("logged_at", startOfDay.toISOString())
-      .lte("logged_at", endOfDay.toISOString())
+      .eq("ist_date", istDate)
       .order("logged_at", { ascending: true })
 
     if (error) {
@@ -113,13 +120,40 @@ export async function getMealEntriesForDate(userId: string, date: string): Promi
   }
 }
 
-// Get daily nutrition summary
-export async function getDailyNutritionSummary(userId: string, date: string): Promise<DailyNutritionSummary> {
+// Get meal entries for a date range (IST dates)
+export async function getMealEntriesForDateRange(
+  userId: string,
+  startDate: string,
+  endDate: string,
+): Promise<MealEntry[]> {
   try {
-    const meals = await getMealEntriesForDate(userId, date)
+    const { data, error } = await supabase
+      .from("meal_entries")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("ist_date", startDate)
+      .lte("ist_date", endDate)
+      .order("logged_at", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching meal entries for date range:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getMealEntriesForDateRange:", error)
+    return []
+  }
+}
+
+// Get daily nutrition summary with IST date handling
+export async function getDailyNutritionSummary(userId: string, istDate: string): Promise<DailyNutritionSummary> {
+  try {
+    const meals = await getMealEntriesForDate(userId, istDate)
 
     const summary: DailyNutritionSummary = {
-      date,
+      date: istDate,
       total_calories: 0,
       total_protein: 0,
       total_carbs: 0,
@@ -159,7 +193,7 @@ export async function getDailyNutritionSummary(userId: string, date: string): Pr
   } catch (error) {
     console.error("Error in getDailyNutritionSummary:", error)
     return {
-      date,
+      date: istDate,
       total_calories: 0,
       total_protein: 0,
       total_carbs: 0,
@@ -196,7 +230,13 @@ export async function updateMealEntry(
   updates: Partial<Pick<MealEntry, "serving_size" | "serving_unit" | "meal_type">>,
 ): Promise<MealEntry | null> {
   try {
-    const { data, error } = await supabase.from("meal_entries").update(updates).eq("id", entryId).select().single()
+    // If updating meal_type or other fields that might affect the IST date, recalculate
+    const updateData = {
+      ...updates,
+      updated_at: getISTDateTime(),
+    }
+
+    const { data, error } = await supabase.from("meal_entries").update(updateData).eq("id", entryId).select().single()
 
     if (error) {
       console.error("Error updating meal entry:", error)
@@ -207,5 +247,28 @@ export async function updateMealEntry(
   } catch (error) {
     console.error("Error in updateMealEntry:", error)
     return null
+  }
+}
+
+// Get weekly meal summary (7 days of IST dates)
+export async function getWeeklyMealSummary(userId: string, endDate: string): Promise<DailyNutritionSummary[]> {
+  try {
+    const summaries: DailyNutritionSummary[] = []
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(endDate)
+      date.setDate(date.getDate() - i)
+      const istDate = date.toLocaleDateString("en-CA", {
+        timeZone: "Asia/Kolkata",
+      })
+
+      const summary = await getDailyNutritionSummary(userId, istDate)
+      summaries.push(summary)
+    }
+
+    return summaries
+  } catch (error) {
+    console.error("Error in getWeeklyMealSummary:", error)
+    return []
   }
 }

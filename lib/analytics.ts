@@ -1,28 +1,33 @@
 "use client"
 
 import React from "react"
-
 import { supabase } from "./supabase"
+import { getISTDateTime, getISTDate } from "./timezone-utils"
 
 // Types for analytics events
 export interface AnalyticsEvent {
   event_type: string
   event_data?: Record<string, any>
   user_id?: string
+  ist_date?: string // Add IST date for easier querying
 }
 
 export interface SessionData {
   session_id: string
   user_id: string
-  start_time: string
+  start_time: string // UTC
+  end_time?: string // UTC
+  duration_seconds?: number
   pages_visited: string[]
   device_info: Record<string, any>
+  ist_date: string // IST date when session started
 }
 
 export interface FeatureUsage {
   feature_name: string
   action: string
   metadata?: Record<string, any>
+  ist_date?: string
 }
 
 // Analytics event types
@@ -80,7 +85,7 @@ export const ANALYTICS_EVENTS = {
   ACHIEVEMENT_UNLOCKED: "achievement_unlocked",
 } as const
 
-// Session management
+// Session management with IST support
 class SessionManager {
   private sessionId: string
   private startTime: Date
@@ -110,6 +115,8 @@ class SessionManager {
     if (!this.userId) return
 
     try {
+      const istDate = getISTDate()
+
       await supabase.from("user_sessions").insert([
         {
           user_id: this.userId,
@@ -117,6 +124,7 @@ class SessionManager {
           start_time: this.startTime.toISOString(),
           pages_visited: Array.from(this.pagesVisited),
           device_info: this.getDeviceInfo(),
+          ist_date: istDate,
         },
       ])
     } catch (error) {
@@ -165,7 +173,7 @@ class SessionManager {
 // Global session manager instance
 export const sessionManager = new SessionManager()
 
-// Core analytics functions
+// Core analytics functions with IST support
 export async function trackEvent(event: AnalyticsEvent): Promise<void> {
   try {
     const {
@@ -178,6 +186,7 @@ export async function trackEvent(event: AnalyticsEvent): Promise<void> {
     }
 
     const userId = event.user_id || user?.id
+    const istDate = getISTDate()
 
     await supabase.from("user_analytics").insert([
       {
@@ -186,9 +195,10 @@ export async function trackEvent(event: AnalyticsEvent): Promise<void> {
         event_data: {
           ...event.event_data,
           session_id: sessionManager.getSessionId(),
-          timestamp: new Date().toISOString(),
+          timestamp: getISTDateTime(),
           url: typeof window !== "undefined" ? window.location.pathname : "",
         },
+        ist_date: istDate,
       },
     ])
   } catch (error) {
@@ -203,6 +213,8 @@ export async function trackFeatureUsage(usage: FeatureUsage): Promise<void> {
     } = await supabase.auth.getUser()
     if (!user) return
 
+    const istDate = usage.ist_date || getISTDate()
+
     // Use upsert to increment usage count
     await supabase.from("feature_usage").upsert(
       {
@@ -211,7 +223,8 @@ export async function trackFeatureUsage(usage: FeatureUsage): Promise<void> {
         action: usage.action,
         metadata: usage.metadata,
         usage_count: 1,
-        last_used: new Date().toISOString(),
+        last_used: getISTDateTime(),
+        ist_date: istDate,
       },
       {
         onConflict: "user_id,feature_name,action",
@@ -244,6 +257,8 @@ export async function trackAuthEvent(
       data: { user },
     } = await supabase.auth.getUser()
 
+    const istDate = getISTDate()
+
     await supabase.from("auth_events").insert([
       {
         user_id: user?.id || null,
@@ -253,6 +268,7 @@ export async function trackAuthEvent(
         error_message: errorMessage,
         ip_address: null, // Would need server-side implementation for real IP
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        ist_date: istDate,
       },
     ])
   } catch (error) {

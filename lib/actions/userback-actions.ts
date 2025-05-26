@@ -10,14 +10,15 @@ export async function getUserbackConfig(userId?: string) {
       console.warn("Userback token not found, using fallback")
       return {
         success: false,
-        token: null,
+        hasToken: false,
         error: "Token not configured",
       }
     }
 
-    // Generate a session-specific configuration
-    const config = {
-      token: userbackToken,
+    // Return success status without exposing the token
+    return {
+      success: true,
+      hasToken: true,
       userId: userId,
       timestamp: Date.now(),
       // Add any server-side context you want to include
@@ -26,17 +27,11 @@ export async function getUserbackConfig(userId?: string) {
         version: "1.0.0",
       },
     }
-
-    return {
-      success: true,
-      token: userbackToken,
-      config,
-    }
   } catch (error) {
     console.error("Error getting Userback config:", error)
     return {
       success: false,
-      token: null,
+      hasToken: false,
       error: "Failed to get configuration",
     }
   }
