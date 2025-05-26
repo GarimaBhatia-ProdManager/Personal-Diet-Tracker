@@ -20,6 +20,37 @@ import { logWaterIntake, getWaterIntake } from "@/lib/water-logging"
 import { analytics, sessionManager, trackAuthEvent, usePageTracking, useTimeTracking } from "@/lib/analytics"
 import React from "react"
 
+// Utility function to get IST time
+const getISTTime = () => {
+  return new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Kolkata",
+  })
+}
+
+const getISTDate = () => {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  })
+}
+
+const getTimeBasedGreeting = () => {
+  const istTime = new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour12: false,
+  })
+  const hour = Number.parseInt(istTime.split(" ")[1].split(":")[0])
+
+  if (hour >= 5 && hour < 12) {
+    return { greeting: "Good morning!", emoji: "🌅" }
+  } else if (hour >= 12 && hour < 17) {
+    return { greeting: "Good afternoon!", emoji: "☀️" }
+  } else if (hour >= 17 && hour < 21) {
+    return { greeting: "Good evening!", emoji: "🌆" }
+  } else {
+    return { greeting: "Good night!", emoji: "🌙" }
+  }
+}
+
 export default function DietTrackerApp() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfileType | null>(null)
@@ -38,10 +69,20 @@ export default function DietTrackerApp() {
   const [waterGlasses, setWaterGlasses] = useState(0)
   const [userStreak, setUserStreak] = useState(0)
   const [isLoadingStreak, setIsLoadingStreak] = useState(true)
+  const [timeBasedGreeting, setTimeBasedGreeting] = useState(getTimeBasedGreeting())
 
   // Analytics tracking
   usePageTracking("dashboard")
   useTimeTracking("main_app")
+
+  // Update greeting every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeBasedGreeting(getTimeBasedGreeting())
+    }, 60000) // Update every minute
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Track user session when user changes
   React.useEffect(() => {
@@ -104,7 +145,7 @@ export default function DietTrackerApp() {
 
     // Save to database
     if (user?.id) {
-      await logWaterIntake(user.id, newCount)
+      await logWaterIntake(user.id, newCount, getISTDate())
     }
   }
 
@@ -120,7 +161,7 @@ export default function DietTrackerApp() {
 
       // Save to database
       if (user?.id) {
-        await logWaterIntake(user.id, newCount)
+        await logWaterIntake(user.id, newCount, getISTDate())
       }
     }
   }
@@ -131,10 +172,13 @@ export default function DietTrackerApp() {
       let streak = 0
       const today = new Date()
 
+      // Convert to IST for accurate date calculation
+      const istToday = new Date(today.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+
       // Check backwards from today
       for (let i = 0; i < 30; i++) {
-        const checkDate = new Date(today)
-        checkDate.setDate(today.getDate() - i)
+        const checkDate = new Date(istToday)
+        checkDate.setDate(istToday.getDate() - i)
         const dateString = checkDate.toISOString().split("T")[0]
 
         const meals = await getMealEntriesForDate(userId, dateString)
@@ -242,7 +286,7 @@ export default function DietTrackerApp() {
 
   const loadDailyStats = async (userId: string) => {
     try {
-      const today = new Date().toISOString().split("T")[0]
+      const today = getISTDate()
       const summary = await getDailyNutritionSummary(userId, today)
 
       // Load water intake for today
@@ -363,11 +407,18 @@ export default function DietTrackerApp() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Good morning! 🌅</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {timeBasedGreeting.greeting} {timeBasedGreeting.emoji}
+            </h1>
             <p className="text-gray-600 text-sm">{userProfile?.full_name || "Nutrition Explorer"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className="bg-primary text-white border-primary rounded-custom">Day 7 🔥</Badge>
+            {/* Dynamic Streak Badge - Only show if user has a streak */}
+            {userStreak > 0 && !isLoadingStreak && (
+              <Badge className="bg-primary text-white border-primary rounded-custom">
+                {userStreak} day{userStreak !== 1 ? "s" : ""} 🔥
+              </Badge>
+            )}
             <Button
               variant="ghost"
               size="sm"

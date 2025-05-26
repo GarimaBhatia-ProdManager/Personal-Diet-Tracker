@@ -25,53 +25,60 @@ interface TrendsAnalyticsProps {
   userId: string
 }
 
+// Utility function to get IST date
+const getISTDate = (daysOffset = 0) => {
+  const date = new Date()
+  date.setDate(date.getDate() + daysOffset)
+  return date.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  })
+}
+
 export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
   usePageTracking("trends")
   const [hasData, setHasData] = useState(false)
   const [loading, setLoading] = useState(true)
   const [totalMealsLogged, setTotalMealsLogged] = useState(0)
   const [daysWithData, setDaysWithData] = useState(0)
+  const [todayMealsCount, setTodayMealsCount] = useState(0)
 
   useEffect(() => {
     checkUserData()
   }, [userId])
 
   useEffect(() => {
-    trackEvent({ event_type: ANALYTICS_EVENTS.WEEKLY_TRENDS_VIEW })
-  }, [])
-
-  useEffect(() => {
-    trackEvent({ event_type: ANALYTICS_EVENTS.MONTHLY_TRENDS_VIEW })
-  }, [])
-
-  useEffect(() => {
-    trackEvent({ event_type: ANALYTICS_EVENTS.INSIGHTS_VIEW })
+    trackEvent({ event_type: ANALYTICS_EVENTS.TRENDS_VIEW })
   }, [])
 
   const checkUserData = async () => {
     setLoading(true)
     try {
-      // Check the last 30 days for any meal entries
+      // Check the last 30 days for any meal entries using IST dates
       let totalMeals = 0
       let daysWithMeals = 0
+      let todayMeals = 0
 
       for (let i = 0; i < 30; i++) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        const dateString = date.toISOString().split("T")[0]
+        const dateString = getISTDate(-i) // Get IST date for i days ago
 
         const meals = await getMealEntriesForDate(userId, dateString)
         if (meals.length > 0) {
           totalMeals += meals.length
           daysWithMeals++
+
+          // Count today's meals specifically
+          if (i === 0) {
+            todayMeals = meals.length
+          }
         }
       }
 
       setTotalMealsLogged(totalMeals)
       setDaysWithData(daysWithMeals)
+      setTodayMealsCount(todayMeals)
 
-      // Consider user has meaningful data if they have logged meals on at least 3 days
-      setHasData(daysWithMeals >= 3 && totalMeals >= 5)
+      // Consider user has meaningful data if they have logged meals on at least 3 days OR have logged meals today
+      setHasData(daysWithMeals >= 3 || (todayMeals > 0 && totalMeals >= 3))
     } catch (error) {
       console.error("Error checking user data:", error)
       setHasData(false)
@@ -102,9 +109,13 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
             <div className="w-16 h-16 bg-primary rounded-custom flex items-center justify-center mx-auto mb-4">
               <BarChart3 className="h-8 w-8 text-white" />
             </div>
-            <CardTitle className="text-2xl text-gray-900">Start Your Nutrition Journey!</CardTitle>
+            <CardTitle className="text-2xl text-gray-900">
+              {todayMealsCount > 0 ? "Great Start!" : "Start Your Nutrition Journey!"}
+            </CardTitle>
             <CardDescription className="text-gray-600 text-lg">
-              Track your meals for a few days to unlock personalized insights and trends
+              {todayMealsCount > 0
+                ? "You've logged meals today! Keep tracking for a few more days to unlock detailed insights."
+                : "Track your meals for a few days to unlock personalized insights and trends"}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
@@ -128,7 +139,7 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
 
             <div className="bg-white rounded-custom p-4 border border-gray-200 mb-6">
               <h4 className="font-semibold text-gray-900 mb-3">Your Progress So Far</h4>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-primary">{totalMealsLogged}</p>
                   <p className="text-sm text-gray-600">Meals Logged</p>
@@ -136,6 +147,10 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
                 <div className="text-center">
                   <p className="text-2xl font-bold text-blue-600">{daysWithData}</p>
                   <p className="text-sm text-gray-600">Days Tracked</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">{todayMealsCount}</p>
+                  <p className="text-sm text-gray-600">Today's Meals</p>
                 </div>
               </div>
 
@@ -158,13 +173,15 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
             <Button
               className="bg-primary hover:bg-primary/90 text-white rounded-custom px-8 py-3"
               onClick={() => {
-                // This would typically navigate to the log tab
-                const event = new CustomEvent("switchTab", { detail: "log" })
-                window.dispatchEvent(event)
+                // Navigate to log tab
+                const tabTrigger = document.querySelector('[data-state="inactive"][value="log"]') as HTMLElement
+                if (tabTrigger) {
+                  tabTrigger.click()
+                }
               }}
             >
               <Plus className="h-5 w-5 mr-2" />
-              Log Your First Meal
+              {todayMealsCount > 0 ? "Log Another Meal" : "Log Your First Meal"}
             </Button>
           </CardContent>
         </Card>
@@ -298,7 +315,7 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
     avgProtein: 143,
     avgCompletion: 92,
     bestStreak: 12,
-    totalMealsLogged: 84,
+    totalMealsLogged: totalMealsLogged,
     favoriteFood: "Grilled Chicken",
     mostActiveDay: "Saturday",
   }
@@ -435,8 +452,8 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
                   <p className="text-sm text-gray-600">Avg Completion</p>
                 </div>
                 <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-orange-600">{monthlyStats.bestStreak}</p>
-                  <p className="text-sm text-gray-600">Best Streak (days)</p>
+                  <p className="text-2xl font-bold text-orange-600">{monthlyStats.totalMealsLogged}</p>
+                  <p className="text-sm text-gray-600">Total Meals Logged</p>
                 </div>
               </div>
             </CardContent>
