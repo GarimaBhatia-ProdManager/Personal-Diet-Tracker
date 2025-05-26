@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Mail, Lock, User } from "lucide-react"
+import { Loader2, Mail, Lock, User, Leaf } from "lucide-react"
 import { signUp, signIn } from "@/lib/auth"
 
 interface AuthFormProps {
@@ -88,27 +88,44 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Personal Diet Tracker</CardTitle>
-          <CardDescription>Track your nutrition goals and build healthy habits</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-green-50 p-4">
+      <Card className="w-full max-w-md shadow-lg border-gray-200 rounded-custom">
+        <CardHeader className="text-center pb-6">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-primary rounded-custom flex items-center justify-center">
+              <Leaf className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold text-gray-900">Personal Diet Tracker</CardTitle>
+          <CardDescription className="text-gray-600">
+            Track your nutrition goals and build healthy habits
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 rounded-custom">
+              <TabsTrigger
+                value="signin"
+                className="rounded-custom data-[state=active]:bg-white data-[state=active]:text-primary"
+              >
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger
+                value="signup"
+                className="rounded-custom data-[state=active]:bg-white data-[state=active]:text-primary"
+              >
+                Sign Up
+              </TabsTrigger>
             </TabsList>
 
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="rounded-custom">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
             {success && (
-              <Alert>
+              <Alert className="border-primary bg-green-50 text-green-800 rounded-custom">
                 <AlertDescription>{success}</AlertDescription>
               </Alert>
             )}
@@ -116,7 +133,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-email" className="text-gray-700">
+                    Email
+                  </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -125,13 +144,15 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="your.email@example.com"
                       value={signInData.email}
                       onChange={(e) => setSignInData({ ...signInData, email: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <Label htmlFor="signin-password" className="text-gray-700">
+                    Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -140,12 +161,16 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="Enter your password"
                       value={signInData.password}
                       onChange={(e) => setSignInData({ ...signInData, password: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 text-white rounded-custom"
+                  disabled={isLoading}
+                >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -161,7 +186,9 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
+                  <Label htmlFor="signup-name" className="text-gray-700">
+                    Full Name
+                  </Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -170,13 +197,15 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="Your full name"
                       value={signUpData.fullName}
                       onChange={(e) => setSignUpData({ ...signUpData, fullName: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label htmlFor="signup-email" className="text-gray-700">
+                    Email
+                  </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -185,13 +214,15 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="your.email@example.com"
                       value={signUpData.email}
                       onChange={(e) => setSignUpData({ ...signUpData, email: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
+                  <Label htmlFor="signup-password" className="text-gray-700">
+                    Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -200,13 +231,15 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="Create a password (min 6 characters)"
                       value={signUpData.password}
                       onChange={(e) => setSignUpData({ ...signUpData, password: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">Confirm Password</Label>
+                  <Label htmlFor="signup-confirm" className="text-gray-700">
+                    Confirm Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -215,12 +248,16 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       placeholder="Confirm your password"
                       value={signUpData.confirmPassword}
                       onChange={(e) => setSignUpData({ ...signUpData, confirmPassword: e.target.value })}
-                      className="pl-10"
+                      className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 text-white rounded-custom"
+                  disabled={isLoading}
+                >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

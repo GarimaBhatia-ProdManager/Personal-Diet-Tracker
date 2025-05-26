@@ -21,21 +21,30 @@ export const signUp = async (email: string, password: string, fullName: string) 
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
       try {
-        const { error: profileError } = await supabase.from("user_profiles").insert([
-          {
-            user_id: data.user.id,
-            full_name: fullName,
-            daily_calories: 2000,
-            daily_protein: 150,
-            daily_carbs: 250,
-            daily_fat: 67,
-            goal_type: "maintenance",
-          },
-        ])
+        // Check if profile already exists first
+        const { data: existingProfile } = await supabase
+          .from("user_profiles")
+          .select("id")
+          .eq("user_id", data.user.id)
+          .maybeSingle()
 
-        if (profileError) {
-          console.error("Profile creation error:", profileError)
-          // Don't throw here - user is created, profile can be created later
+        if (!existingProfile) {
+          const { error: profileError } = await supabase.from("user_profiles").insert([
+            {
+              user_id: data.user.id,
+              full_name: fullName,
+              daily_calories: 2000,
+              daily_protein: 150,
+              daily_carbs: 250,
+              daily_fat: 67,
+              goal_type: "maintenance",
+            },
+          ])
+
+          if (profileError) {
+            console.error("Profile creation error:", profileError)
+            // Don't throw here - user is created, profile can be created later
+          }
         }
       } catch (profileErr) {
         console.error("Failed to create user profile:", profileErr)
@@ -73,20 +82,81 @@ export const getCurrentUser = async () => {
 }
 
 export const getUserProfile = async (userId: string) => {
-  const { data, error } = await supabase.from("user_profiles").select("*").eq("user_id", userId).single()
+  try {
+    // Use maybeSingle() to handle cases where there might be 0 or 1 rows
+    const { data, error } = await supabase.from("user_profiles").select("*").eq("user_id", userId).maybeSingle()
 
-  if (error) throw error
-  return data
+    if (error) {
+      console.error("Error fetching user profile:", error)
+      throw error
+    }
+
+    // If no profile found, return null instead of throwing
+    if (!data) {
+      console.log("No user profile found for user:", userId)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in getUserProfile:", error)
+    throw error
+  }
 }
 
 export const ensureUserProfile = async (userId: string, fullName: string) => {
   try {
-    // Check if profile exists
-    const { data: existingProfile } = await supabase.from("user_profiles").select("id").eq("user_id", userId).single()
+    // Check if profile exists using maybeSingle()
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (fetchError) {
+      console.error("Error checking existing profile:", fetchError)
+      throw fetchError
+    }
 
     if (!existingProfile) {
       // Create profile if it doesn't exist
-      const { error } = await supabase.from("user_profiles").insert([
+      const { data: newProfile, error: insertError } = await supabase
+        .from("user_profiles")
+        .insert([
+          {
+            user_id: userId,
+            full_name: fullName,
+            daily_calories: 2000,
+            daily_protein: 150,
+            daily_carbs: 250,
+            daily_fat: 67,
+            goal_type: "maintenance",
+          },
+        ])
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error("Error creating user profile:", insertError)
+        throw insertError
+      }
+
+      return newProfile
+    }
+
+    return existingProfile
+  } catch (error) {
+    console.error("Error ensuring user profile:", error)
+    throw error
+  }
+}
+
+export const createOrUpdateUserProfile = async (userId: string, fullName: string) => {
+  try {
+    // Use upsert to either insert or update
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .upsert(
         {
           user_id: userId,
           full_name: fullName,
@@ -95,13 +165,23 @@ export const ensureUserProfile = async (userId: string, fullName: string) => {
           daily_carbs: 250,
           daily_fat: 67,
           goal_type: "maintenance",
+          updated_at: new Date().toISOString(),
         },
-      ])
+        {
+          onConflict: "user_id",
+        },
+      )
+      .select()
+      .single()
 
-      if (error) throw error
+    if (error) {
+      console.error("Error upserting user profile:", error)
+      throw error
     }
+
+    return data
   } catch (error) {
-    console.error("Error ensuring user profile:", error)
+    console.error("Error in createOrUpdateUserProfile:", error)
     throw error
   }
 }
