@@ -3,7 +3,7 @@ const USDA_API_KEY = "DEMO_KEY" // You can get a free API key from https://fdc.n
 const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1"
 
 // Open Food Facts API integration (no API key required)
-const OFF_BASE_URL = "https://world.openfoodfacts.org/api/v2"
+const OFF_BASE_URL = "https://world.openfoodfacts.org"
 
 export interface USDAFood {
   fdcId: number
@@ -60,73 +60,73 @@ export async function searchUSDAFoods(query: string, limit = 10): Promise<Normal
   try {
     const response = await fetch(
       `${USDA_BASE_URL}/foods/search?query=${encodeURIComponent(query)}&pageSize=${limit}&api_key=${USDA_API_KEY}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
     )
 
     if (!response.ok) {
-      throw new Error(`USDA API error: ${response.status}`)
+      console.warn(`USDA API error: ${response.status} - ${response.statusText}`)
+      return []
     }
 
     const data = await response.json()
-
     return data.foods?.map((food: USDAFood) => normalizeUSDAFood(food)) || []
   } catch (error) {
-    console.error("Error searching USDA foods:", error)
+    console.warn("USDA API unavailable:", error)
     return []
   }
 }
 
-// Search Open Food Facts
+// Search Open Food Facts with corrected endpoint
 export async function searchOpenFoodFacts(query: string, limit = 10): Promise<NormalizedFood[]> {
   try {
-    const response = await fetch(
-      `${OFF_BASE_URL}/search?search_terms=${encodeURIComponent(query)}&page_size=${limit}&fields=code,product_name,brands,nutriments,serving_size,image_url,ingredients_text`,
-    )
+    // Use the correct Open Food Facts search endpoint
+    const searchUrl = `${OFF_BASE_URL}/cgi/search.pl?search_terms=${encodeURIComponent(query)}&page_size=${limit}&json=1&fields=code,product_name,brands,nutriments,serving_size,image_url,ingredients_text`
+
+    const response = await fetch(searchUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "PersonalDietTracker/1.0",
+      },
+    })
 
     if (!response.ok) {
-      throw new Error(`Open Food Facts API error: ${response.status}`)
+      console.warn(`Open Food Facts API error: ${response.status} - ${response.statusText}`)
+      return []
     }
 
     const data = await response.json()
-
     return data.products?.map((product: OpenFoodFactsProduct) => normalizeOpenFoodFactsProduct(product)) || []
   } catch (error) {
-    console.error("Error searching Open Food Facts:", error)
+    console.warn("Open Food Facts API unavailable:", error)
     return []
   }
 }
 
-// Combined search function
+// Combined search function with better error handling
 export async function searchAllFoodAPIs(query: string): Promise<NormalizedFood[]> {
+  const results: NormalizedFood[] = []
+
+  // Search APIs with individual error handling
   try {
-    // Search both APIs in parallel
-    const [usdaResults, offResults] = await Promise.allSettled([
-      searchUSDAFoods(query, 5),
-      searchOpenFoodFacts(query, 5),
-    ])
-
-    const allResults: NormalizedFood[] = []
-
-    if (usdaResults.status === "fulfilled") {
-      allResults.push(...usdaResults.value)
-    }
-
-    if (offResults.status === "fulfilled") {
-      allResults.push(...offResults.value)
-    }
-
-    // Sort by relevance (exact matches first, then partial matches)
-    return allResults.sort((a, b) => {
-      const aExact = a.name.toLowerCase().includes(query.toLowerCase())
-      const bExact = b.name.toLowerCase().includes(query.toLowerCase())
-
-      if (aExact && !bExact) return -1
-      if (!aExact && bExact) return 1
-      return 0
-    })
+    const usdaResults = await searchUSDAFoods(query, 5)
+    results.push(...usdaResults)
   } catch (error) {
-    console.error("Error searching food APIs:", error)
-    return []
+    console.warn("USDA search failed:", error)
   }
+
+  try {
+    const offResults = await searchOpenFoodFacts(query, 5)
+    results.push(...offResults)
+  } catch (error) {
+    console.warn("Open Food Facts search failed:", error)
+  }
+
+  return results
 }
 
 // Get detailed food information by ID
@@ -134,12 +134,12 @@ export async function getFoodDetails(id: string, source: "usda" | "openfoodfacts
   try {
     if (source === "usda") {
       const response = await fetch(`${USDA_BASE_URL}/food/${id}?api_key=${USDA_API_KEY}`)
-      if (!response.ok) throw new Error(`USDA API error: ${response.status}`)
+      if (!response.ok) return null
       const food = await response.json()
       return normalizeUSDAFood(food)
     } else {
-      const response = await fetch(`${OFF_BASE_URL}/product/${id}`)
-      if (!response.ok) throw new Error(`Open Food Facts API error: ${response.status}`)
+      const response = await fetch(`${OFF_BASE_URL}/api/v0/product/${id}.json`)
+      if (!response.ok) return null
       const data = await response.json()
       return normalizeOpenFoodFactsProduct(data.product)
     }
@@ -177,6 +177,19 @@ function normalizeUSDAFood(food: USDAFood): NormalizedFood {
 
 // Normalize Open Food Facts data
 function normalizeOpenFoodFactsProduct(product: OpenFoodFactsProduct): NormalizedFood {
+  if (!product) {
+    return {
+      id: "unknown",
+      name: "Unknown Product",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      serving: "100g",
+      source: "openfoodfacts",
+    }
+  }
+
   const nutriments = product.nutriments || {}
 
   return {
@@ -196,7 +209,7 @@ function normalizeOpenFoodFactsProduct(product: OpenFoodFactsProduct): Normalize
   }
 }
 
-// Local food database (fallback)
+// Enhanced local food database (fallback)
 export const localFoodDatabase: NormalizedFood[] = [
   {
     id: "local-banana",
@@ -252,6 +265,114 @@ export const localFoodDatabase: NormalizedFood[] = [
     serving: "100g",
     source: "local",
   },
+  {
+    id: "local-greek-yogurt",
+    name: "Greek Yogurt",
+    calories: 100,
+    protein: 17,
+    carbs: 6,
+    fat: 0,
+    serving: "1 cup (245g)",
+    source: "local",
+  },
+  {
+    id: "local-almonds",
+    name: "Almonds",
+    calories: 164,
+    protein: 6,
+    carbs: 6,
+    fat: 14,
+    fiber: 3.5,
+    serving: "1 oz (28g)",
+    source: "local",
+  },
+  {
+    id: "local-sweet-potato",
+    name: "Sweet Potato",
+    calories: 112,
+    protein: 2,
+    carbs: 26,
+    fat: 0.1,
+    fiber: 3.9,
+    serving: "1 medium (128g)",
+    source: "local",
+  },
+  {
+    id: "local-spinach",
+    name: "Spinach",
+    calories: 7,
+    protein: 0.9,
+    carbs: 1.1,
+    fat: 0.1,
+    fiber: 0.7,
+    serving: "1 cup (30g)",
+    source: "local",
+  },
+  {
+    id: "local-broccoli",
+    name: "Broccoli",
+    calories: 25,
+    protein: 3,
+    carbs: 5,
+    fat: 0.3,
+    fiber: 2.6,
+    serving: "1 cup (91g)",
+    source: "local",
+  },
+  {
+    id: "local-oats",
+    name: "Oats",
+    calories: 389,
+    protein: 16.9,
+    carbs: 66.3,
+    fat: 6.9,
+    fiber: 10.6,
+    serving: "100g dry",
+    source: "local",
+  },
+  {
+    id: "local-eggs",
+    name: "Eggs",
+    calories: 155,
+    protein: 13,
+    carbs: 1.1,
+    fat: 11,
+    serving: "2 large eggs (100g)",
+    source: "local",
+  },
+  {
+    id: "local-apple",
+    name: "Apple",
+    calories: 95,
+    protein: 0.5,
+    carbs: 25,
+    fat: 0.3,
+    fiber: 4.4,
+    sugar: 19,
+    serving: "1 medium (182g)",
+    source: "local",
+  },
+  {
+    id: "local-quinoa",
+    name: "Quinoa",
+    calories: 222,
+    protein: 8,
+    carbs: 39,
+    fat: 3.6,
+    fiber: 5.2,
+    serving: "1 cup cooked (185g)",
+    source: "local",
+  },
+  {
+    id: "local-tuna",
+    name: "Tuna",
+    calories: 144,
+    protein: 30,
+    carbs: 0,
+    fat: 1,
+    serving: "100g",
+    source: "local",
+  },
 ]
 
 // Search local database
@@ -259,19 +380,30 @@ export function searchLocalFoods(query: string): NormalizedFood[] {
   return localFoodDatabase.filter((food) => food.name.toLowerCase().includes(query.toLowerCase()))
 }
 
-// Combined search with local fallback
+// Combined search with local fallback and better error handling
 export async function searchFoodsWithFallback(query: string): Promise<NormalizedFood[]> {
   if (!query.trim()) return []
 
   try {
-    // First try API search
-    const apiResults = await searchAllFoodAPIs(query)
-
-    // Also search local database
+    // Always search local database first for instant results
     const localResults = searchLocalFoods(query)
 
-    // Combine results, prioritizing API results
-    const combinedResults = [...apiResults, ...localResults]
+    // Try API search but don't let it block the response
+    let apiResults: NormalizedFood[] = []
+
+    try {
+      apiResults = await Promise.race([
+        searchAllFoodAPIs(query),
+        new Promise<NormalizedFood[]>(
+          (resolve) => setTimeout(() => resolve([]), 5000), // 5 second timeout
+        ),
+      ])
+    } catch (error) {
+      console.warn("API search timed out or failed, using local results only")
+    }
+
+    // Combine results, prioritizing local results for better UX
+    const combinedResults = [...localResults, ...apiResults]
 
     // Remove duplicates based on name similarity
     const uniqueResults = combinedResults.filter((food, index, array) => {
@@ -281,7 +413,29 @@ export async function searchFoodsWithFallback(query: string): Promise<Normalized
     return uniqueResults.slice(0, 15) // Limit to 15 results
   } catch (error) {
     console.error("Error in combined food search:", error)
-    // Fallback to local database only
+    // Always fallback to local database
     return searchLocalFoods(query)
+  }
+}
+
+// Simple search function that prioritizes local database
+export async function searchFoodsSimple(query: string): Promise<NormalizedFood[]> {
+  if (!query.trim()) return []
+
+  // For now, just use local database to ensure reliability
+  const localResults = searchLocalFoods(query)
+
+  // If we have good local results, return them immediately
+  if (localResults.length > 0) {
+    return localResults
+  }
+
+  // Only try APIs if no local results found
+  try {
+    const apiResults = await searchAllFoodAPIs(query)
+    return apiResults.slice(0, 10)
+  } catch (error) {
+    console.warn("API search failed, returning empty results")
+    return []
   }
 }

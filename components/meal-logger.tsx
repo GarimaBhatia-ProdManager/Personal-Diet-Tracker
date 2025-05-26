@@ -8,20 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Plus,
-  Search,
-  Clock,
-  Utensils,
-  Sparkles,
-  Zap,
-  Loader2,
-  Trash2,
-  ExternalLink,
-  Database,
-  Globe,
-} from "lucide-react"
-import { searchFoodsWithFallback, type NormalizedFood } from "@/lib/food-apis"
+import { Plus, Search, Clock, Utensils, Sparkles, Zap, Loader2, Trash2, Database, Globe } from "lucide-react"
+import { searchFoodsSimple, type NormalizedFood } from "@/lib/food-apis"
 import { logMealEntry, getMealEntriesForDate, deleteMealEntry, type MealEntry } from "@/lib/meal-logging"
 
 interface MealLoggerProps {
@@ -53,7 +41,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
     loadTodayMeals()
   }, [userId])
 
-  // Debounced search function
+  // Debounced search function with better error handling
   const debouncedSearch = useCallback(
     debounce(async (query: string) => {
       if (!query.trim()) {
@@ -62,12 +50,20 @@ export default function MealLogger({ userId }: MealLoggerProps) {
       }
 
       setIsSearching(true)
+      setError(null)
+
       try {
-        const results = await searchFoodsWithFallback(query)
+        // Use the simple search function for better reliability
+        const results = await searchFoodsSimple(query)
         setSearchResults(results)
+
+        if (results.length === 0) {
+          console.log("No results found for query:", query)
+        }
       } catch (error) {
         console.error("Search error:", error)
-        setError("Failed to search foods. Please try again.")
+        setError("Search temporarily unavailable. Try adding a custom food instead.")
+        setSearchResults([])
       } finally {
         setIsSearching(false)
       }
@@ -201,7 +197,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
         </Alert>
       )}
 
-      {/* Enhanced Food Search with Real APIs */}
+      {/* Enhanced Food Search */}
       <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-gray-900">
@@ -209,7 +205,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
             Smart Food Search
           </CardTitle>
           <CardDescription className="text-gray-600">
-            Search from USDA FoodData Central, Open Food Facts, and local database
+            Search from our curated food database with nutrition information
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -239,7 +235,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
                 id="food-search"
-                placeholder="Try 'chicken breast', 'coca cola', or 'banana'..."
+                placeholder="Try 'chicken breast', 'banana', or 'oats'..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 border-gray-300 rounded-custom focus:border-primary focus:ring-primary"
@@ -259,16 +255,6 @@ export default function MealLogger({ userId }: MealLoggerProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1">
-                        {food.image && (
-                          <img
-                            src={food.image || "/placeholder.svg"}
-                            alt={food.name}
-                            className="w-12 h-12 object-cover rounded-custom"
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none"
-                            }}
-                          />
-                        )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-medium text-gray-900">{food.name}</h4>
@@ -302,12 +288,12 @@ export default function MealLogger({ userId }: MealLoggerProps) {
               ) : isSearching ? (
                 <div className="text-center py-8 text-gray-500">
                   <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
-                  <p>Searching food databases...</p>
+                  <p>Searching food database...</p>
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <Sparkles className="h-8 w-8 mx-auto mb-2" />
-                  <p>No foods found. Try a different search term!</p>
+                  <p>No foods found. Try a different search term or add a custom food below!</p>
                 </div>
               )}
             </div>
@@ -531,23 +517,22 @@ export default function MealLogger({ userId }: MealLoggerProps) {
         </CardContent>
       </Card>
 
-      {/* API Information */}
+      {/* Food Database Information */}
       <Card className="bg-blue-50 border-blue-200 rounded-custom">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <ExternalLink className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Database className="h-5 w-5 text-blue-600 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-blue-900 mb-2">Powered by Real Food APIs</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">Comprehensive Food Database</h4>
               <div className="space-y-1 text-sm text-blue-800">
                 <p>
-                  • <strong>USDA FoodData Central:</strong> Official nutrition data from the US Department of
-                  Agriculture
+                  • <strong>Local Database:</strong> Curated nutrition data for common foods
                 </p>
                 <p>
-                  • <strong>Open Food Facts:</strong> Collaborative database of food products worldwide
+                  • <strong>Custom Foods:</strong> Add your own foods with nutrition information
                 </p>
                 <p>
-                  • <strong>Local Database:</strong> Curated common foods for quick access
+                  • <strong>Accurate Tracking:</strong> Detailed macronutrient and calorie information
                 </p>
               </div>
             </div>

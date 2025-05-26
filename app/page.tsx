@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase"
 import { getCurrentUser, getUserProfile, signOut, createOrUpdateUserProfile } from "@/lib/auth"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
+import { getDailyNutritionSummary } from "@/lib/actions/nutrition-actions"
 
 export default function DietTrackerApp() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -23,6 +24,13 @@ export default function DietTrackerApp() {
   const [showCamera, setShowCamera] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [todayStats, setTodayStats] = useState({
+    calories: { consumed: 0, target: userProfile?.daily_calories || 2000 },
+    protein: { consumed: 0, target: userProfile?.daily_protein || 150 },
+    carbs: { consumed: 0, target: userProfile?.daily_carbs || 250 },
+    fat: { consumed: 0, target: userProfile?.daily_fat || 67 },
+    water: { consumed: 5, target: 8 },
+  })
 
   useEffect(() => {
     initializeAuth()
@@ -80,6 +88,8 @@ export default function DietTrackerApp() {
 
       setUserProfile(profile)
       console.log("Profile loaded successfully:", profile)
+
+      await loadDailyStats()
     } catch (error) {
       console.error("Error loading user profile:", error)
 
@@ -123,6 +133,25 @@ export default function DietTrackerApp() {
     setIsListening(!isListening)
   }
 
+  const loadDailyStats = async () => {
+    if (!user?.id) return
+
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const summary = await getDailyNutritionSummary(user.id, today)
+
+      setTodayStats({
+        calories: { consumed: summary.total_calories, target: userProfile?.daily_calories || 2000 },
+        protein: { consumed: summary.total_protein, target: userProfile?.daily_protein || 150 },
+        carbs: { consumed: summary.total_carbs, target: userProfile?.daily_carbs || 250 },
+        fat: { consumed: summary.total_fat, target: userProfile?.daily_fat || 67 },
+        water: { consumed: 5, target: 8 }, // Keep water tracking separate for now
+      })
+    } catch (error) {
+      console.error("Error loading daily stats:", error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-green-50">
@@ -151,14 +180,6 @@ export default function DietTrackerApp() {
         </div>
       </div>
     )
-  }
-
-  const todayStats = {
-    calories: { consumed: 1420, target: userProfile?.daily_calories || 2000 },
-    protein: { consumed: 89, target: userProfile?.daily_protein || 150 },
-    carbs: { consumed: 165, target: userProfile?.daily_carbs || 250 },
-    fat: { consumed: 52, target: userProfile?.daily_fat || 67 },
-    water: { consumed: 5, target: 8 },
   }
 
   const calorieProgress = (todayStats.calories.consumed / todayStats.calories.target) * 100
