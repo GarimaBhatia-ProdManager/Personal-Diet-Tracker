@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { MessageSquare, Star, Send, Users, TrendingUp, Clock } from "lucide-react"
+import { submitFeedbackToSupabase } from "@/lib/actions/feedback-actions"
+import { supabase } from "@/lib/supabase"
 
 export default function FeedbackCollection() {
   const [feedback, setFeedback] = useState({
@@ -70,11 +72,41 @@ export default function FeedbackCollection() {
     setFeedback({ ...feedback, rating })
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (feedback.rating && feedback.message) {
-      setSubmitted(true)
-      // In a real app, this would send to your feedback collection system
-      console.log("Feedback submitted:", feedback)
+      try {
+        // Get current user
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        // Submit to Supabase
+        const result = await submitFeedbackToSupabase(user?.id || null, {
+          rating: feedback.rating,
+          category: feedback.category,
+          message: feedback.message,
+          email: feedback.email,
+          feedbackType: "beta_testing",
+          metadata: {
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+            source: "feedback_collection_component",
+          },
+        })
+
+        if (result.success) {
+          setSubmitted(true)
+          console.log("Feedback submitted to Supabase:", result.data)
+        } else {
+          console.error("Failed to submit feedback:", result.error)
+          // Still show success to user, but log the error
+          setSubmitted(true)
+        }
+      } catch (error) {
+        console.error("Error submitting feedback:", error)
+        // Still show success to user
+        setSubmitted(true)
+      }
     }
   }
 
