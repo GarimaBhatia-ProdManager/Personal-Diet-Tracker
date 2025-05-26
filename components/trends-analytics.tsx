@@ -24,9 +24,10 @@ import { getISTDate } from "@/lib/timezone-utils"
 
 interface TrendsAnalyticsProps {
   userId: string
+  onLogMeal?: () => void
 }
 
-export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
+export default function TrendsAnalytics({ userId, onLogMeal }: TrendsAnalyticsProps) {
   usePageTracking("trends")
   const [hasData, setHasData] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -188,10 +189,14 @@ export default function TrendsAnalytics({ userId }: TrendsAnalyticsProps) {
             <Button
               className="bg-primary hover:bg-primary/90 text-white rounded-custom px-8 py-3"
               onClick={() => {
-                // Navigate to log tab
-                const tabTrigger = document.querySelector('[data-state="inactive"][value="log"]') as HTMLElement
-                if (tabTrigger) {
-                  tabTrigger.click()
+                if (onLogMeal) {
+                  onLogMeal()
+                } else {
+                  // Navigate to log tab
+                  const tabTrigger = document.querySelector('[data-state="inactive"][value="log"]') as HTMLElement
+                  if (tabTrigger) {
+                    tabTrigger.click()
+                  }
                 }
               }}
             >

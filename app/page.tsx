@@ -11,7 +11,7 @@ import { getCurrentUser, getUserProfile, signOut, createOrUpdateUserProfile } fr
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
 import { getDailyNutritionSummary } from "@/lib/actions/nutrition-actions"
-import { getMealEntriesForDate } from "@/lib/meal-logging"
+import { getMealEntriesForDate, logMealEntry } from "@/lib/meal-logging"
 import { logWaterIntake, getWaterIntake } from "@/lib/water-logging"
 import { analytics, sessionManager, trackAuthEvent, usePageTracking, useTimeTracking } from "@/lib/analytics"
 import { getISTDate } from "@/lib/timezone-utils"
@@ -298,6 +298,46 @@ export default function DietTrackerApp() {
       }))
     } catch (error) {
       console.error("Error loading daily stats:", error)
+    }
+  }
+
+  // Quick add food function
+  const handleQuickAddFood = async (food: any) => {
+    if (!user?.id) return
+
+    try {
+      // Determine meal type based on current time
+      const hour = new Date().getHours()
+      let mealType = "snack"
+      if (hour >= 6 && hour < 11) mealType = "breakfast"
+      else if (hour >= 11 && hour < 16) mealType = "lunch"
+      else if (hour >= 16 && hour < 22) mealType = "dinner"
+
+      const normalizedFood = {
+        id: `quick-${food.name.toLowerCase()}`,
+        name: food.name,
+        calories: food.calories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+        serving: "1 serving",
+        source: "local" as const,
+      }
+
+      const result = await logMealEntry(user.id, normalizedFood, mealType as any, 1)
+
+      if (result) {
+        // Track analytics
+        await analytics.trackMealAdded(food.name, mealType, food.calories, "quick_add")
+
+        // Refresh daily stats
+        await loadDailyStats(user.id)
+
+        // Show success feedback
+        console.log(`Added ${food.name} to ${mealType}!`)
+      }
+    } catch (error) {
+      console.error("Error adding quick food:", error)
     }
   }
 
@@ -713,7 +753,7 @@ export default function DietTrackerApp() {
                 </CardContent>
               </Card>
 
-              {/* Quick Add Foods */}
+              {/* Quick Add Foods - Now functional */}
               <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
                 <CardContent className="p-4">
                   <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
@@ -726,10 +766,7 @@ export default function DietTrackerApp() {
                         key={food.name}
                         variant="outline"
                         className="h-auto p-3 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 rounded-custom"
-                        onClick={() => {
-                          analytics.trackQuickAddClick(food.name)
-                          console.log(`Added ${food.name}`)
-                        }}
+                        onClick={() => handleQuickAddFood(food)}
                       >
                         <span className="text-2xl">{food.emoji}</span>
                         <span className="text-xs font-medium">{food.name}</span>
@@ -749,7 +786,7 @@ export default function DietTrackerApp() {
 
             <TabsContent value="trends" className="mt-6">
               <React.Suspense fallback={<ComponentLoader />}>
-                <TrendsAnalytics userId={user.id} />
+                <TrendsAnalytics userId={user.id} onLogMeal={() => setActiveTab("log")} />
               </React.Suspense>
             </TabsContent>
 
