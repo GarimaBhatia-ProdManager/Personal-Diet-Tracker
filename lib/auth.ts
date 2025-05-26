@@ -2,7 +2,10 @@ import { supabase } from "./supabase"
 
 export const signUp = async (email: string, password: string, fullName: string) => {
   try {
-    // First, sign up the user
+    // Get the current origin for redirect URL
+    const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined
+
+    // First, sign up the user with proper redirect URL
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -10,6 +13,7 @@ export const signUp = async (email: string, password: string, fullName: string) 
         data: {
           full_name: fullName,
         },
+        emailRedirectTo: redirectTo,
       },
     })
 
@@ -182,6 +186,31 @@ export const createOrUpdateUserProfile = async (userId: string, fullName: string
     return data
   } catch (error) {
     console.error("Error in createOrUpdateUserProfile:", error)
+    throw error
+  }
+}
+
+// Handle auth callback from email confirmation
+export const handleAuthCallback = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession()
+
+    if (error) {
+      console.error("Auth callback error:", error)
+      throw error
+    }
+
+    if (data.session?.user) {
+      // User is authenticated, ensure profile exists
+      const userDisplayName =
+        data.session.user.user_metadata?.full_name || data.session.user.email?.split("@")[0] || "User"
+
+      await createOrUpdateUserProfile(data.session.user.id, userDisplayName)
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error handling auth callback:", error)
     throw error
   }
 }
