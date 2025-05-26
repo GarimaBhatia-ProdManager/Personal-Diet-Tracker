@@ -9,8 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, Search, Clock, Utensils, Sparkles, Zap, Loader2, Trash2, Database, Globe } from "lucide-react"
-import { searchFoodsSimple, type NormalizedFood } from "@/lib/food-apis"
-import { logMealEntry, getMealEntriesForDate, deleteMealEntry, type MealEntry } from "@/lib/meal-logging"
+import { searchFoodsWithBackup, type NormalizedFood } from "@/lib/food-apis-enhanced"
+import {
+  logMealEntryEnhanced,
+  getMealEntriesForDate,
+  deleteMealEntry,
+  type MealEntry,
+} from "@/lib/meal-logging-enhanced"
 import { analytics, trackEvent, ANALYTICS_EVENTS } from "@/lib/analytics"
 import { getISTDate, formatISTTimeOnly } from "@/lib/timezone-utils"
 
@@ -62,7 +67,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
 
       try {
         // Use the simple search function for better reliability
-        const results = await searchFoodsSimple(query)
+        const results = await searchFoodsWithBackup(query)
         setSearchResults(results)
 
         // Track search results
@@ -107,7 +112,7 @@ export default function MealLogger({ userId }: MealLoggerProps) {
     setSuccess(null)
 
     try {
-      const result = await logMealEntry(
+      const result = await logMealEntryEnhanced(
         userId,
         food,
         selectedMealType as "breakfast" | "lunch" | "dinner" | "snack",
