@@ -74,27 +74,28 @@ export const signIn = async (email: string, password: string) => {
 }
 
 export const signInWithGoogle = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
-    },
-  })
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    })
 
-  if (error) throw error
-  return data
-}
+    if (error) {
+      console.error("Google OAuth error:", error)
+      throw error
+    }
 
-export const signInWithApple = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "apple",
-    options: {
-      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
-    },
-  })
-
-  if (error) throw error
-  return data
+    return data
+  } catch (error) {
+    console.error("Google sign-in error:", error)
+    throw error
+  }
 }
 
 export const signOut = async () => {
