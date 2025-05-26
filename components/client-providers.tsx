@@ -2,6 +2,11 @@
 
 import type React from "react"
 
-export function ClientProviders({ children }: { children: React.ReactNode }) {
+interface ClientProvidersProps {
+  children: React.ReactNode
+  userId?: string
+}
+
+export function ClientProviders({ children }: ClientProvidersProps) {
   return <>{children}</>
 }
