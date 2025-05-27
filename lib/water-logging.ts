@@ -31,7 +31,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
     // Check if entry exists first
     const { data: existingEntry, error: checkError } = await supabase
       .from("water_entries")
-      .select("id")
+      .select("id, user_id, glasses_consumed, ist_date")
       .eq("user_id", userId)
       .eq("ist_date", targetDate)
       .single()
@@ -48,7 +48,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         .from("water_entries")
         .update({ glasses_consumed: glasses })
         .eq("id", existingEntry.id)
-        .select()
+        .select("id, user_id, glasses_consumed, ist_date")
         .single()
 
       if (updateError) {
@@ -69,7 +69,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         glasses_consumed: glasses,
         ist_date: targetDate
       }])
-      .select()
+      .select("id, user_id, glasses_consumed, ist_date")
       .single()
 
     if (insertError) {
