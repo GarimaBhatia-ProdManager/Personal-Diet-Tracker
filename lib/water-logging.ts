@@ -1,11 +1,12 @@
 import { supabase } from "./supabase"
-import { getISTDate } from "./timezone-utils"
+import { getISTDate, getISTDateTime } from "./timezone-utils"
 
 export interface WaterEntry {
   id: string
   user_id: string
   glasses_consumed: number
   ist_date: string // YYYY-MM-DD in IST
+  created_at: string // UTC timestamp
 }
 
 // Log or update water intake for a specific IST date
@@ -22,6 +23,8 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
 
   try {
     const targetDate = istDate || getISTDate()
+    const now = getISTDateTime()
+
     console.log(`[Water] Attempting to log water intake:`, {
       userId,
       glasses,
@@ -31,7 +34,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
     // Check if entry exists first
     const { data: existingEntry, error: checkError } = await supabase
       .from("water_entries")
-      .select("id, user_id, glasses_consumed, ist_date")
+      .select("id")
       .eq("user_id", userId)
       .eq("ist_date", targetDate)
       .single()
@@ -41,6 +44,8 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
       return null
     }
 
+    let result: WaterEntry | null = null
+
     if (existingEntry) {
       // Update existing entry
       console.log("[Water] Updating existing entry:", existingEntry.id)
@@ -48,7 +53,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         .from("water_entries")
         .update({ glasses_consumed: glasses })
         .eq("id", existingEntry.id)
-        .select("id, user_id, glasses_consumed, ist_date")
+        .select()
         .single()
 
       if (updateError) {
@@ -56,29 +61,32 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         return null
       }
 
+      result = updateData
       console.log("[Water] Successfully updated entry:", updateData)
-      return updateData
+    } else {
+      // Create new entry
+      console.log("[Water] Creating new entry")
+      const { data: insertData, error: insertError } = await supabase
+        .from("water_entries")
+        .insert([{
+          user_id: userId,
+          glasses_consumed: glasses,
+          ist_date: targetDate,
+          created_at: now
+        }])
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error("[Water] Error creating entry:", insertError)
+        return null
+      }
+
+      result = insertData
+      console.log("[Water] Successfully created entry:", insertData)
     }
 
-    // Create new entry
-    console.log("[Water] Creating new entry")
-    const { data: insertData, error: insertError } = await supabase
-      .from("water_entries")
-      .insert([{
-        user_id: userId,
-        glasses_consumed: glasses,
-        ist_date: targetDate
-      }])
-      .select("id, user_id, glasses_consumed, ist_date")
-      .single()
-
-    if (insertError) {
-      console.error("[Water] Error creating entry:", insertError)
-      return null
-    }
-
-    console.log("[Water] Successfully created entry:", insertData)
-    return insertData
+    return result
   } catch (error) {
     console.error("[Water] Unexpected error:", error)
     return null
@@ -141,7 +149,7 @@ export async function getWaterHistory(userId: string, days = 7): Promise<WaterEn
 
     const { data, error } = await supabase
       .from("water_entries")
-      .select("id, user_id, glasses_consumed, ist_date")
+      .select("*")
       .eq("user_id", userId)
       .gte("ist_date", startDate)
       .lte("ist_date", endDate)
@@ -176,7 +184,7 @@ export async function getWaterIntakeRange(userId: string, startDate: string, end
 
     const { data, error } = await supabase
       .from("water_entries")
-      .select("id, user_id, glasses_consumed, ist_date")
+      .select("*")
       .eq("user_id", userId)
       .gte("ist_date", startDate)
       .lte("ist_date", endDate)
