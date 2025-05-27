@@ -2,6 +2,9 @@ import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
 import { UserbackScript } from "@/components/userback-script"
+import { Header } from "@/components/layout/Header"
+import { ThemeProvider } from "@/components/theme-provider"
+import { ClientProviders } from "@/components/client-providers"
 
 export const metadata: Metadata = {
   title: "Personal Diet Tracker",
@@ -17,7 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ClientProviders>
+            <Header />
+            <main>{children}</main>
+          </ClientProviders>
+        </ThemeProvider>
         <UserbackScript />
       </body>
     </html>
