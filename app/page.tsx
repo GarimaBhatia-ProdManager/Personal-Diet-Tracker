@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Camera, Mic, Plus, LogOut, Flame, Droplets } from "lucide-react"
+import { Flame, Droplets } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser, getUserProfile, signOut, createOrUpdateUserProfile } from "@/lib/auth"
 import type { User as AuthUser } from "@supabase/supabase-js"
@@ -23,7 +23,6 @@ const MealLogger = React.lazy(() => import("@/components/meal-logger"))
 const TrendsAnalytics = React.lazy(() => import("@/components/trends-analytics"))
 const UserProfile = React.lazy(() => import("@/components/user-profile"))
 const AuthForm = React.lazy(() => import("@/components/auth/auth-form"))
-const FeedbackButton = React.lazy(() => import("@/components/feedback-button"))
 
 // Loading component
 const ComponentLoader = () => (
@@ -32,22 +31,12 @@ const ComponentLoader = () => (
   </div>
 )
 
-const getTimeBasedGreeting = () => {
-  const istTime = new Date().toLocaleString("en-US", {
-    timeZone: "Asia/Kolkata",
-    hour12: false,
-  })
-  const hour = Number.parseInt(istTime.split(" ")[1].split(":")[0])
-
-  if (hour >= 5 && hour < 12) {
-    return { greeting: "Good morning!", emoji: "🌅" }
-  } else if (hour >= 12 && hour < 17) {
-    return { greeting: "Good afternoon!", emoji: "☀️" }
-  } else if (hour >= 17 && hour < 21) {
-    return { greeting: "Good evening!", emoji: "🌆" }
-  } else {
-    return { greeting: "Good night!", emoji: "🌙" }
-  }
+// Get time-based greeting
+function getTimeBasedGreeting() {
+  const hour = new Date().getHours()
+  if (hour < 12) return "Good morning"
+  if (hour < 17) return "Good afternoon"
+  return "Good evening"
 }
 
 export default function DietTrackerApp() {
@@ -55,8 +44,6 @@ export default function DietTrackerApp() {
   const [userProfile, setUserProfile] = useState<UserProfileType | null>(null)
   const [activeTab, setActiveTab] = useState("dashboard")
   const [loading, setLoading] = useState(true)
-  const [showCamera, setShowCamera] = useState(false)
-  const [isListening, setIsListening] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [todayStats, setTodayStats] = useState({
     calories: { consumed: 0, target: 2000 },
@@ -127,6 +114,8 @@ export default function DietTrackerApp() {
   }
 
   const addWaterGlass = async () => {
+    if (!user?.id) return
+
     const newCount = waterGlasses + 1
     setWaterGlasses(newCount)
 
@@ -143,26 +132,22 @@ export default function DietTrackerApp() {
     }
 
     // Save to database with IST date
-    if (user?.id) {
-      await logWaterIntake(user.id, newCount, getISTDate())
-    }
+    await logWaterIntake(user.id, newCount, getISTDate())
   }
 
   const removeWaterGlass = async () => {
-    if (waterGlasses > 0) {
-      const newCount = waterGlasses - 1
-      setWaterGlasses(newCount)
+    if (!user?.id || waterGlasses <= 0) return
 
-      setTodayStats((prev) => ({
-        ...prev,
-        water: { consumed: newCount, target: 8 },
-      }))
+    const newCount = waterGlasses - 1
+    setWaterGlasses(newCount)
 
-      // Save to database with IST date
-      if (user?.id) {
-        await logWaterIntake(user.id, newCount, getISTDate())
-      }
-    }
+    setTodayStats((prev) => ({
+      ...prev,
+      water: { consumed: newCount, target: 8 },
+    }))
+
+    // Save to database with IST date
+    await logWaterIntake(user.id, newCount, getISTDate())
   }
 
   const calculateUserStreak = async (userId: string) => {
@@ -276,10 +261,6 @@ export default function DietTrackerApp() {
     }
   }
 
-  const handleVoiceInput = () => {
-    setIsListening(!isListening)
-  }
-
   const loadDailyStats = async (userId: string) => {
     try {
       const today = getISTDate()
@@ -341,6 +322,16 @@ export default function DietTrackerApp() {
     }
   }
 
+  const handleTabChange = async (tab: string) => {
+    setActiveTab(tab)
+    analytics.trackTabSwitch(activeTab, tab)
+
+    // Reload data when switching to dashboard
+    if (tab === "dashboard" && user?.id) {
+      await loadDailyStats(user.id)
+    }
+  }
+
   // Simple loading screen
   if (loading) {
     return (
@@ -356,7 +347,7 @@ export default function DietTrackerApp() {
   if (!user) {
     return (
       <React.Suspense fallback={<ComponentLoader />}>
-        <AuthForm onAuthSuccess={() => {}} />
+        <AuthForm />
       </React.Suspense>
     )
   }
@@ -387,466 +378,375 @@ export default function DietTrackerApp() {
     { emoji: "🥛", name: "Milk", calories: 150, protein: 8, carbs: 12, fat: 8 },
   ]
 
-  const handleTabChange = (newTab: string) => {
-    analytics.trackTabSwitch(activeTab, newTab)
-    setActiveTab(newTab)
-  }
-
   return (
     <ClientProviders userId={user?.id}>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50">
-        {/* Camera Overlay */}
-        {showCamera && (
-          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
-            <div className="relative w-full h-full max-w-md mx-auto">
-              <div className="absolute inset-4 border-2 border-white/50 rounded-custom">
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-64 h-64 border-4 border-white rounded-custom relative">
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary-green rounded-tl-lg"></div>
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary-green rounded-tr-lg"></div>
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary-green rounded-bl-lg"></div>
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary-green rounded-br-lg"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <p className="text-white text-center text-sm">
-                        Point camera at food
-                        <br />
-                        <span className="text-primary-green">AI will detect nutrition</span>
-                      </p>
-                    </div>
-                  </div>
+        <div className="container py-6">
+          {loading ? (
+            <ComponentLoader />
+          ) : !user ? (
+            <React.Suspense fallback={<ComponentLoader />}>
+              <AuthForm />
+            </React.Suspense>
+          ) : (
+            <div className="container mx-auto px-4 py-6 max-w-md">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {timeBasedGreeting}
+                  </h1>
+                  <p className="text-gray-600 text-sm">{displayProfile?.full_name || "Nutrition Explorer"}</p>
+                  <p className="text-gray-500 text-xs">IST: {getISTDate()}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Dynamic Streak Badge - Only show if user has a streak */}
+                  {userStreak > 0 && (
+                    <Badge className="bg-primary text-white border-primary rounded-custom">
+                      {userStreak} day{userStreak !== 1 ? "s" : ""} 🔥
+                    </Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="text-gray-600 hover:bg-gray-100 rounded-custom"
+                  >
+                    Sign Out
+                  </Button>
                 </div>
               </div>
-              <Button
-                onClick={() => setShowCamera(false)}
-                className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white text-black hover:bg-gray-100 rounded-custom"
-              >
-                Close Camera
-              </Button>
-            </div>
-          </div>
-        )}
 
-        <div className="container mx-auto px-4 py-6 max-w-md">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {timeBasedGreeting.greeting} {timeBasedGreeting.emoji}
-              </h1>
-              <p className="text-gray-600 text-sm">{displayProfile?.full_name || "Nutrition Explorer"}</p>
-              <p className="text-gray-500 text-xs">IST: {getISTDate()}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Dynamic Streak Badge - Only show if user has a streak */}
-              {userStreak > 0 && (
-                <Badge className="bg-primary text-white border-primary rounded-custom">
-                  {userStreak} day{userStreak !== 1 ? "s" : ""} 🔥
-                </Badge>
-              )}
-              <React.Suspense fallback={null}>
-                <FeedbackButton
-                  user={
-                    user
-                      ? {
-                          id: user.id,
-                          name: displayProfile?.full_name,
-                          email: user.email,
-                        }
-                      : undefined
-                  }
-                  variant="minimal"
-                />
-              </React.Suspense>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSignOut}
-                className="text-gray-600 hover:bg-gray-100 rounded-custom"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+              {/* Navigation Tabs */}
+              <Tabs value={activeTab} onValueChange={handleTabChange} className="mb-6">
+                <TabsList className="grid w-full grid-cols-4 bg-gray-100 rounded-custom">
+                  <TabsTrigger
+                    value="dashboard"
+                    className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
+                  >
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="log"
+                    className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
+                  >
+                    Log
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="trends"
+                    className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
+                  >
+                    Trends
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="profile"
+                    className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
+                  >
+                    Profile
+                  </TabsTrigger>
+                </TabsList>
 
-          {/* Navigation Tabs */}
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="mb-6">
-            <TabsList className="grid w-full grid-cols-4 bg-gray-100 rounded-custom">
-              <TabsTrigger
-                value="dashboard"
-                className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
-              >
-                Dashboard
-              </TabsTrigger>
-              <TabsTrigger
-                value="log"
-                className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
-              >
-                Log
-              </TabsTrigger>
-              <TabsTrigger
-                value="trends"
-                className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
-              >
-                Trends
-              </TabsTrigger>
-              <TabsTrigger
-                value="profile"
-                className="text-gray-600 data-[state=active]:bg-white data-[state=active]:text-primary rounded-custom"
-              >
-                Profile
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="dashboard" className="mt-6">
-              {/* User Streak */}
-              <Card className="mb-6 bg-gradient-to-r from-primary/10 to-green-100 border-primary/20 rounded-custom">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {userStreak === 0 ? "Start Your Streak!" : `${userStreak} Day Streak! 🔥`}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {userStreak === 0
-                          ? "Log your first meal to start building consistency"
-                          : userStreak === 1
-                            ? "Great start! Keep logging to build your streak"
-                            : `You've been consistently tracking for ${userStreak} days`}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-primary">{userStreak}</div>
-                      <div className="text-xs text-gray-500">days</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Large Calorie Circle with Smaller Macro Rings */}
-              <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-                <CardContent className="p-6">
-                  <div className="flex flex-col items-center">
-                    {/* Main Calorie Circle */}
-                    <div className="relative mb-6">
-                      <div className="relative w-40 h-40">
-                        <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 160 160">
-                          <circle cx="80" cy="80" r="70" stroke="#E5E7EB" strokeWidth="12" fill="none" />
-                          <circle
-                            cx="80"
-                            cy="80"
-                            r="70"
-                            stroke="#00B74A"
-                            strokeWidth="12"
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeDasharray={`${calorieProgress * 4.4} 440`}
-                            className="transition-all duration-1000 ease-out"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-3xl font-bold text-gray-900">{todayStats.calories.consumed}</span>
-                          <span className="text-sm text-gray-500">of {todayStats.calories.target}</span>
-                          <span className="text-xs text-gray-400">calories</span>
+                <TabsContent value="dashboard" className="mt-6">
+                  {/* User Streak */}
+                  <Card className="mb-6 bg-gradient-to-r from-primary/10 to-green-100 border-primary/20 rounded-custom">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {userStreak === 0 ? "Start Your Streak!" : `${userStreak} Day Streak! 🔥`}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {userStreak === 0
+                              ? "Log your first meal to start building consistency"
+                              : userStreak === 1
+                                ? "Great start! Keep logging to build your streak"
+                                : `You've been consistently tracking for ${userStreak} days`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-primary">{userStreak}</div>
+                          <div className="text-xs text-gray-500">days</div>
                         </div>
                       </div>
-                    </div>
+                    </CardContent>
+                  </Card>
 
-                    {/* Macro Progress Rings */}
-                    <div className="grid grid-cols-4 gap-4 w-full">
-                      {/* Protein */}
-                      <div className="text-center">
-                        <div className="relative w-16 h-16 mx-auto mb-2">
-                          <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
-                            <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
-                            <circle
-                              cx="32"
-                              cy="32"
-                              r="28"
-                              stroke="#3B82F6"
-                              strokeWidth="4"
-                              fill="none"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(todayStats.protein.consumed / todayStats.protein.target) * 175.9} 175.9`}
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-gray-900">
-                              {Math.round(todayStats.protein.consumed)}g
-                            </span>
+                  {/* Large Calorie Circle with Smaller Macro Rings */}
+                  <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
+                    <CardContent className="p-6">
+                      <div className="flex flex-col items-center">
+                        {/* Main Calorie Circle */}
+                        <div className="relative mb-6">
+                          <div className="relative w-40 h-40">
+                            <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 160 160">
+                              <circle cx="80" cy="80" r="70" stroke="#E5E7EB" strokeWidth="12" fill="none" />
+                              <circle
+                                cx="80"
+                                cy="80"
+                                r="70"
+                                stroke="#00B74A"
+                                strokeWidth="12"
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeDasharray={`${calorieProgress * 4.4} 440`}
+                                className="transition-all duration-1000 ease-out"
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-3xl font-bold text-gray-900">{todayStats.calories.consumed}</span>
+                              <span className="text-sm text-gray-500">of {todayStats.calories.target}</span>
+                              <span className="text-xs text-gray-400">calories</span>
+                            </div>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-600">Protein</p>
-                        <p className="text-xs text-blue-600">
-                          {Math.round((todayStats.protein.consumed / todayStats.protein.target) * 100)}%
-                        </p>
-                      </div>
 
-                      {/* Carbs */}
-                      <div className="text-center">
-                        <div className="relative w-16 h-16 mx-auto mb-2">
-                          <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
-                            <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
-                            <circle
-                              cx="32"
-                              cy="32"
-                              r="28"
-                              stroke="#F59E0B"
-                              strokeWidth="4"
-                              fill="none"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(todayStats.carbs.consumed / todayStats.carbs.target) * 175.9} 175.9`}
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-gray-900">
-                              {Math.round(todayStats.carbs.consumed)}g
-                            </span>
+                        {/* Macro Progress Rings */}
+                        <div className="grid grid-cols-4 gap-4 w-full">
+                          {/* Protein */}
+                          <div className="text-center">
+                            <div className="relative w-16 h-16 mx-auto mb-2">
+                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+                                <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
+                                <circle
+                                  cx="32"
+                                  cy="32"
+                                  r="28"
+                                  stroke="#3B82F6"
+                                  strokeWidth="4"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeDasharray={`${(todayStats.protein.consumed / todayStats.protein.target) * 175.9} 175.9`}
+                                  className="transition-all duration-1000 ease-out"
+                                />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-xs font-bold text-gray-900">
+                                  {Math.round(todayStats.protein.consumed)}g
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600">Protein</p>
+                            <p className="text-xs text-blue-600">
+                              {Math.round((todayStats.protein.consumed / todayStats.protein.target) * 100)}%
+                            </p>
+                          </div>
+
+                          {/* Carbs */}
+                          <div className="text-center">
+                            <div className="relative w-16 h-16 mx-auto mb-2">
+                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+                                <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
+                                <circle
+                                  cx="32"
+                                  cy="32"
+                                  r="28"
+                                  stroke="#F59E0B"
+                                  strokeWidth="4"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeDasharray={`${(todayStats.carbs.consumed / todayStats.carbs.target) * 175.9} 175.9`}
+                                  className="transition-all duration-1000 ease-out"
+                                />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-xs font-bold text-gray-900">
+                                  {Math.round(todayStats.carbs.consumed)}g
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600">Carbs</p>
+                            <p className="text-xs text-orange-600">
+                              {Math.round((todayStats.carbs.consumed / todayStats.carbs.target) * 100)}%
+                            </p>
+                          </div>
+
+                          {/* Fat */}
+                          <div className="text-center">
+                            <div className="relative w-16 h-16 mx-auto mb-2">
+                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+                                <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
+                                <circle
+                                  cx="32"
+                                  cy="32"
+                                  r="28"
+                                  stroke="#EF4444"
+                                  strokeWidth="4"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeDasharray={`${(todayStats.fat.consumed / todayStats.fat.target) * 175.9} 175.9`}
+                                  className="transition-all duration-1000 ease-out"
+                                />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-xs font-bold text-gray-900">
+                                  {Math.round(todayStats.fat.consumed)}g
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600">Fat</p>
+                            <p className="text-xs text-red-600">
+                              {Math.round((todayStats.fat.consumed / todayStats.fat.target) * 100)}%
+                            </p>
+                          </div>
+
+                          {/* Water */}
+                          <div className="text-center">
+                            <div className="relative w-16 h-16 mx-auto mb-2">
+                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+                                <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
+                                <circle
+                                  cx="32"
+                                  cy="32"
+                                  r="28"
+                                  stroke="#06B6D4"
+                                  strokeWidth="4"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeDasharray={`${(todayStats.water.consumed / todayStats.water.target) * 175.9} 175.9`}
+                                  className="transition-all duration-1000 ease-out"
+                                />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-xs font-bold text-gray-900">{todayStats.water.consumed}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600">Water</p>
+                            <p className="text-xs text-cyan-600">
+                              {Math.round((todayStats.water.consumed / todayStats.water.target) * 100)}%
+                            </p>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-600">Carbs</p>
-                        <p className="text-xs text-orange-600">
-                          {Math.round((todayStats.carbs.consumed / todayStats.carbs.target) * 100)}%
-                        </p>
-                      </div>
 
-                      {/* Fat */}
-                      <div className="text-center">
-                        <div className="relative w-16 h-16 mx-auto mb-2">
-                          <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
-                            <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
-                            <circle
-                              cx="32"
-                              cy="32"
-                              r="28"
-                              stroke="#EF4444"
-                              strokeWidth="4"
-                              fill="none"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(todayStats.fat.consumed / todayStats.fat.target) * 175.9} 175.9`}
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-gray-900">
-                              {Math.round(todayStats.fat.consumed)}g
-                            </span>
-                          </div>
+                        {/* Calorie Summary */}
+                        <div className="text-center mt-4">
+                          <p className="text-lg font-semibold mb-1 text-gray-900">
+                            {remaining > 0 ? `${remaining} calories left` : "Goal reached! 🎉"}
+                          </p>
+                          <p className="text-sm text-gray-600">{Math.round(calorieProgress)}% of daily goal</p>
                         </div>
-                        <p className="text-xs text-gray-600">Fat</p>
-                        <p className="text-xs text-red-600">
-                          {Math.round((todayStats.fat.consumed / todayStats.fat.target) * 100)}%
-                        </p>
                       </div>
+                    </CardContent>
+                  </Card>
 
-                      {/* Water */}
-                      <div className="text-center">
-                        <div className="relative w-16 h-16 mx-auto mb-2">
-                          <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
-                            <circle cx="32" cy="32" r="28" stroke="#E5E7EB" strokeWidth="4" fill="none" />
-                            <circle
-                              cx="32"
-                              cy="32"
-                              r="28"
-                              stroke="#06B6D4"
-                              strokeWidth="4"
-                              fill="none"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(todayStats.water.consumed / todayStats.water.target) * 175.9} 175.9`}
-                              className="transition-all duration-1000 ease-out"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-gray-900">{todayStats.water.consumed}</span>
-                          </div>
+                  {/* Water Logging Section */}
+                  <Card className="mb-6 bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 rounded-custom">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Droplets className="h-5 w-5 text-cyan-600" />
+                          <h3 className="font-semibold text-gray-900">Water Intake</h3>
                         </div>
-                        <p className="text-xs text-gray-600">Water</p>
-                        <p className="text-xs text-cyan-600">
-                          {Math.round((todayStats.water.consumed / todayStats.water.target) * 100)}%
-                        </p>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-cyan-600">
+                            {todayStats.water.consumed}/{todayStats.water.target}
+                          </p>
+                          <p className="text-xs text-gray-600">glasses (2L goal)</p>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Calorie Summary */}
-                    <div className="text-center mt-4">
-                      <p className="text-lg font-semibold mb-1 text-gray-900">
-                        {remaining > 0 ? `${remaining} calories left` : "Goal reached! 🎉"}
-                      </p>
-                      <p className="text-sm text-gray-600">{Math.round(calorieProgress)}% of daily goal</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                      {/* Water Glasses Visual */}
+                      <div className="flex justify-center mb-4">
+                        <div className="grid grid-cols-4 gap-2">
+                          {Array.from({ length: 8 }, (_, i) => (
+                            <div
+                              key={i}
+                              className={`w-8 h-10 rounded-b-lg border-2 transition-all duration-300 ${
+                                i < todayStats.water.consumed
+                                  ? "bg-cyan-400 border-cyan-500"
+                                  : "bg-gray-100 border-gray-300"
+                              }`}
+                            >
+                              <div
+                                className={`w-full h-full rounded-b-lg ${
+                                  i < todayStats.water.consumed ? "bg-gradient-to-t from-cyan-500 to-cyan-300" : ""
+                                }`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
 
-              {/* Water Logging Section */}
-              <Card className="mb-6 bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 rounded-custom">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Droplets className="h-5 w-5 text-cyan-600" />
-                      <h3 className="font-semibold text-gray-900">Water Intake</h3>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-cyan-600">
-                        {todayStats.water.consumed}/{todayStats.water.target}
-                      </p>
-                      <p className="text-xs text-gray-600">glasses (2L goal)</p>
-                    </div>
-                  </div>
-
-                  {/* Water Glasses Visual */}
-                  <div className="flex justify-center mb-4">
-                    <div className="grid grid-cols-4 gap-2">
-                      {Array.from({ length: 8 }, (_, i) => (
-                        <div
-                          key={i}
-                          className={`w-8 h-10 rounded-b-lg border-2 transition-all duration-300 ${
-                            i < todayStats.water.consumed
-                              ? "bg-cyan-400 border-cyan-500"
-                              : "bg-gray-100 border-gray-300"
-                          }`}
+                      {/* Water Controls */}
+                      <div className="flex items-center justify-center gap-4">
+                        <Button
+                          onClick={removeWaterGlass}
+                          variant="outline"
+                          size="sm"
+                          disabled={todayStats.water.consumed === 0}
+                          className="rounded-custom border-cyan-300 text-cyan-700 hover:bg-cyan-50"
                         >
-                          <div
-                            className={`w-full h-full rounded-b-lg ${
-                              i < todayStats.water.consumed ? "bg-gradient-to-t from-cyan-500 to-cyan-300" : ""
-                            }`}
-                          />
+                          -1 Glass
+                        </Button>
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-gray-900">{todayStats.water.consumed * 250}ml</p>
+                          <p className="text-xs text-gray-600">consumed today</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <Button
+                          onClick={addWaterGlass}
+                          variant="outline"
+                          size="sm"
+                          disabled={todayStats.water.consumed >= 12}
+                          className="rounded-custom border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+                        >
+                          +1 Glass
+                        </Button>
+                      </div>
 
-                  {/* Water Controls */}
-                  <div className="flex items-center justify-center gap-4">
-                    <Button
-                      onClick={removeWaterGlass}
-                      variant="outline"
-                      size="sm"
-                      disabled={todayStats.water.consumed === 0}
-                      className="rounded-custom border-cyan-300 text-cyan-700 hover:bg-cyan-50"
-                    >
-                      -1 Glass
-                    </Button>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-900">{todayStats.water.consumed * 250}ml</p>
-                      <p className="text-xs text-gray-600">consumed today</p>
-                    </div>
-                    <Button
-                      onClick={addWaterGlass}
-                      variant="outline"
-                      size="sm"
-                      disabled={todayStats.water.consumed >= 12}
-                      className="rounded-custom border-cyan-300 text-cyan-700 hover:bg-cyan-50"
-                    >
-                      +1 Glass
-                    </Button>
-                  </div>
+                      {todayStats.water.consumed >= 8 && (
+                        <div className="mt-3 text-center">
+                          <Badge className="bg-cyan-100 text-cyan-800 border-cyan-200 rounded-custom">
+                            🎉 Daily hydration goal achieved!
+                          </Badge>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
 
-                  {todayStats.water.consumed >= 8 && (
-                    <div className="mt-3 text-center">
-                      <Badge className="bg-cyan-100 text-cyan-800 border-cyan-200 rounded-custom">
-                        🎉 Daily hydration goal achieved!
-                      </Badge>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  {/* Quick Add Foods - Now functional */}
+                  <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
+                        <Flame className="h-5 w-5" />
+                        Quick Add
+                      </h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {quickAddFoods.map((food) => (
+                          <Button
+                            key={food.name}
+                            variant="outline"
+                            className="h-auto p-3 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 rounded-custom"
+                            onClick={() => handleQuickAddFood(food)}
+                          >
+                            <span className="text-2xl">{food.emoji}</span>
+                            <span className="text-xs font-medium">{food.name}</span>
+                            <span className="text-xs text-gray-500">{food.calories} cal</span>
+                          </Button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
 
-              {/* Quick Add Foods - Now functional */}
-              <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-custom">
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
-                    <Flame className="h-5 w-5" />
-                    Quick Add
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {quickAddFoods.map((food) => (
-                      <Button
-                        key={food.name}
-                        variant="outline"
-                        className="h-auto p-3 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 rounded-custom"
-                        onClick={() => handleQuickAddFood(food)}
-                      >
-                        <span className="text-2xl">{food.emoji}</span>
-                        <span className="text-xs font-medium">{food.name}</span>
-                        <span className="text-xs text-gray-500">{food.calories} cal</span>
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                <TabsContent value="log" className="mt-6">
+                  <React.Suspense fallback={<ComponentLoader />}>
+                    <MealLogger userId={user.id} />
+                  </React.Suspense>
+                </TabsContent>
 
-            <TabsContent value="log" className="mt-6">
-              <React.Suspense fallback={<ComponentLoader />}>
-                <MealLogger userId={user.id} />
-              </React.Suspense>
-            </TabsContent>
+                <TabsContent value="trends" className="mt-6">
+                  <React.Suspense fallback={<ComponentLoader />}>
+                    <TrendsAnalytics userId={user.id} onLogMeal={() => setActiveTab("log")} />
+                  </React.Suspense>
+                </TabsContent>
 
-            <TabsContent value="trends" className="mt-6">
-              <React.Suspense fallback={<ComponentLoader />}>
-                <TrendsAnalytics userId={user.id} onLogMeal={() => setActiveTab("log")} />
-              </React.Suspense>
-            </TabsContent>
-
-            <TabsContent value="profile" className="mt-6">
-              <React.Suspense fallback={<ComponentLoader />}>
-                <UserProfile user={user} userProfile={displayProfile} onProfileUpdate={setUserProfile} />
-              </React.Suspense>
-            </TabsContent>
-          </Tabs>
-
-          {/* Floating Action Buttons */}
-          <div className="fixed bottom-6 right-6 flex flex-col gap-3">
-            {/* Feedback Button */}
-            <React.Suspense fallback={null}>
-              <FeedbackButton
-                user={
-                  user
-                    ? {
-                        id: user.id,
-                        name: displayProfile?.full_name,
-                        email: user.email,
-                      }
-                    : undefined
-                }
-                variant="floating"
-              />
-            </React.Suspense>
-
-            {/* Voice Input Button */}
-            <Button
-              onClick={() => {
-                analytics.trackVoiceInput(isListening ? "stop" : "start")
-                handleVoiceInput()
-              }}
-              className={`w-14 h-14 rounded-custom shadow-lg transition-all duration-300 ${
-                isListening ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-blue-500 hover:bg-blue-600"
-              }`}
-            >
-              <Mic className="h-6 w-6 text-white" />
-            </Button>
-
-            {/* Camera Button */}
-            <Button
-              onClick={() => {
-                analytics.trackCameraUsage()
-                setShowCamera(true)
-              }}
-              className="w-14 h-14 rounded-custom bg-gray-600 hover:bg-gray-700 shadow-lg transition-all duration-300"
-            >
-              <Camera className="h-6 w-6 text-white" />
-            </Button>
-
-            {/* Add Meal Button */}
-            <Button
-              onClick={() => setActiveTab("log")}
-              className="w-16 h-16 rounded-custom bg-primary hover:bg-primary/90 shadow-lg transition-all duration-300"
-            >
-              <Plus className="h-8 w-8 text-white" />
-            </Button>
-          </div>
+                <TabsContent value="profile" className="mt-6">
+                  <React.Suspense fallback={<ComponentLoader />}>
+                    <UserProfile user={user} userProfile={displayProfile} onProfileUpdate={setUserProfile} />
+                  </React.Suspense>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
         </div>
       </div>
     </ClientProviders>

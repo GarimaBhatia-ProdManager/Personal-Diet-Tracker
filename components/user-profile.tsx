@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart, Eye, EyeOff, Lock } from "lucide-react"
+import { Edit, Save, X, User, Target, Activity, Scale, Ruler, Calendar, Heart, Eye, EyeOff, Lock, MessageSquare } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
@@ -29,6 +29,7 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showPasswordSection, setShowPasswordSection] = useState(false)
+  const [showFeedbackSection, setShowFeedbackSection] = useState(false)
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -183,9 +184,9 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
       // Track which fields changed
       const changedFields: string[] = []
       if (formData.full_name !== userProfile?.full_name) changedFields.push("full_name")
-      if (formData.age !== userProfile?.age) changedFields.push("age")
-      if (formData.height !== userProfile?.height) changedFields.push("height")
-      if (formData.weight !== userProfile?.weight) changedFields.push("weight")
+      if (String(formData.age) !== String(userProfile?.age)) changedFields.push("age")
+      if (String(formData.height) !== String(userProfile?.height)) changedFields.push("height")
+      if (String(formData.weight) !== String(userProfile?.weight)) changedFields.push("weight")
       if (formData.activity_level !== userProfile?.activity_level) changedFields.push("activity_level")
       if (formData.goal_type !== userProfile?.goal_type) changedFields.push("goal_type")
       if (formData.dietary_restrictions !== userProfile?.dietary_restrictions)
@@ -586,6 +587,18 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
           </CardContent>
         )}
       </Card>
+
+      {/* Feedback Button */}
+      <div className="mt-4 pt-4 border-t">
+        <Button
+          variant="outline"
+          onClick={() => window.location.href = `mailto:feedback@example.com?subject=App Feedback&body=Hi, I have feedback about the app...`}
+          className="w-full justify-start text-left font-normal"
+        >
+          <MessageSquare className="mr-2 h-4 w-4" />
+          Send Feedback
+        </Button>
+      </div>
 
       {/* Nutrition Goals */}
       <Card className="bg-white border-gray-200 shadow-sm rounded-custom">

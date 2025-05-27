@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { useUser } from '@supabase/auth-helpers-react';
 import { format } from 'date-fns';
