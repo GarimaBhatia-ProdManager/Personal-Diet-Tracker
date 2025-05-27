@@ -124,7 +124,7 @@ export default function DietTrackerApp() {
       console.log("[Water] Adding water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      const result = await logWaterIntake(user.id, newCount)
       console.log("[Water] Supabase save result:", result)
       
       if (result) {
@@ -164,7 +164,7 @@ export default function DietTrackerApp() {
       console.log("[Water] Removing water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      const result = await logWaterIntake(user.id, newCount)
       console.log("[Water] Supabase save result:", result)
       
       if (result) {
@@ -259,7 +259,7 @@ export default function DietTrackerApp() {
       console.log("[Stats] Nutrition summary:", summary)
 
       // Load water intake
-      const todayWater = await getWaterIntake(userId, today)
+      const todayWater = await getWaterIntake(userId)
       console.log("[Stats] Water intake loaded:", todayWater)
       
       // Update state atomically to prevent race conditions
