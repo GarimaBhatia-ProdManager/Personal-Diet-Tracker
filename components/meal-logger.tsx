@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, Search, Clock, Utensils, Sparkles, Zap, Loader2, Trash2, Database, Globe } from "lucide-react"
-import { searchFoodsWithBackup, type NormalizedFood } from "@/lib/food-apis-enhanced"
+import { searchFoodsWithBackup } from "@/lib/food-apis-enhanced"
+import type { NormalizedFood } from "@/lib/food-database"
 import {
   logMealEntryEnhanced,
   getMealEntriesForDate,
@@ -59,19 +60,11 @@ export default function MealLogger({ userId }: MealLoggerProps) {
       setIsSearching(true)
       setError(null)
 
-      // Track search start
-      await trackEvent({
-        event_type: ANALYTICS_EVENTS.MEAL_SEARCH_START,
-        event_data: { query },
-      })
-
       try {
-        // Use the simple search function for better reliability
+        console.log("Searching for:", query)
         const results = await searchFoodsWithBackup(query)
+        console.log("Search results:", results)
         setSearchResults(results)
-
-        // Track search results
-        await analytics.trackMealSearch(query, results.length)
 
         if (results.length === 0) {
           console.log("No results found for query:", query)
