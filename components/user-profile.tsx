@@ -589,18 +589,6 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
         )}
       </Card>
 
-      {/* Feedback Button */}
-      <div className="mt-4 pt-4 border-t">
-        <Button
-          variant="outline"
-          onClick={() => window.location.href = `mailto:feedback@example.com?subject=App Feedback&body=Hi, I have feedback about the app...`}
-          className="w-full justify-start text-left font-normal"
-        >
-          <MessageSquare className="mr-2 h-4 w-4" />
-          Send Feedback
-        </Button>
-      </div>
-
       {/* Nutrition Goals */}
       <Card className="bg-white border-gray-200 shadow-sm rounded-custom">
         <CardHeader>
@@ -646,7 +634,7 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
         </CardContent>
       </Card>
 
-      {/* Security Section */}
+      {/* Security & Feedback Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -656,6 +644,7 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
           <CardDescription>Manage your account security and provide feedback</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Password Change Section */}
           <div className="flex justify-between items-center">
             <div>
               <h4 className="font-medium mb-1">Change Password</h4>
@@ -739,6 +728,7 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
             </div>
           )}
 
+          {/* Feedback Section */}
           <div className="border-t border-gray-200 pt-4">
             <div className="flex justify-between items-center">
               <div>
