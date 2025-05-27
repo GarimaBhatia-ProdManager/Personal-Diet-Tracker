@@ -36,7 +36,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     fullName: "",
   })
 
-  const supabaseRedirectUri = "https://ussapzuqhkmrrtislyupi.supabase.co/auth/v1/callback"
+  const supabaseRedirectUri = "https://ussapzuqhkmrtislyupi.supabase.co/auth/v1/callback"
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))

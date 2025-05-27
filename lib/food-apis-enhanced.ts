@@ -6,7 +6,7 @@ import {
   normalizeFromDatabase,
 } from "./food-database"
 import type { NormalizedFood } from "./food-database"
-import { supabase } from "./supabase-client" // Declare the supabase variable
+import { supabase } from "./supabase" // Fixed import path
 
 // Open Food Facts API integration
 const OFF_BASE_URL = "https://world.openfoodfacts.org"
