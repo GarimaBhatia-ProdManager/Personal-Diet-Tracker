@@ -6,7 +6,6 @@ export interface WaterEntry {
   user_id: string
   glasses_consumed: number
   ist_date: string // YYYY-MM-DD in IST
-  logged_at: string // UTC timestamp when last updated
   created_at: string // UTC timestamp
   updated_at: string // UTC timestamp
 }
@@ -77,7 +76,6 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
           user_id: userId,
           glasses_consumed: glasses,
           ist_date: targetDate,
-          logged_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
       ])
