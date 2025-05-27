@@ -88,7 +88,7 @@ export default function DietTrackerApp() {
 
       if (currentUser) {
         // Load profile in background, don't block UI
-        loadUserProfile(currentUser.id)
+        loadUserData(currentUser.id)
       }
     } catch (error) {
       console.error("Error initializing auth:", error)
@@ -104,7 +104,7 @@ export default function DietTrackerApp() {
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        loadUserProfile(session.user.id)
+        loadUserData(session.user.id)
       } else {
         setUserProfile(null)
       }
@@ -124,7 +124,7 @@ export default function DietTrackerApp() {
       console.log("Adding water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      const result = await logWaterIntake(user.id, newCount)
       console.log("Supabase save result:", result)
       
       if (result) {
@@ -132,7 +132,7 @@ export default function DietTrackerApp() {
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
-          water: { consumed: newCount, target: 8 },
+          water: { ...prev.water, consumed: newCount },
         }))
 
         // Analytics tracking
@@ -164,7 +164,7 @@ export default function DietTrackerApp() {
       console.log("Removing water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      const result = await logWaterIntake(user.id, newCount)
       console.log("Supabase save result:", result)
       
       if (result) {
@@ -172,7 +172,7 @@ export default function DietTrackerApp() {
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
-          water: { consumed: newCount, target: 8 },
+          water: { ...prev.water, consumed: newCount },
         }))
         console.log("Water glass removed successfully, UI updated")
       } else {
@@ -218,67 +218,21 @@ export default function DietTrackerApp() {
     }
   }
 
-  const loadUserProfile = async (userId: string) => {
-    if (profileLoading) return
-
-    setProfileLoading(true)
-
+  const loadUserData = async (userId: string) => {
     try {
-      console.log("Loading profile for user:", userId)
-
-      let profile = await getUserProfile(userId)
-
-      if (!profile) {
-        console.log("No profile found, creating one...")
-
-        const userDisplayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
-
-        profile = await createOrUpdateUserProfile(userId, userDisplayName)
-        console.log("Created new profile:", profile)
+      // Load profile data
+      const profile = await getUserProfile(userId)
+      if (profile) {
+        setUserProfile(profile)
       }
 
-      setUserProfile(profile)
-      console.log("Profile loaded successfully:", profile)
+      // Load daily stats including water
+      await loadDailyStats(userId)
 
-      // Update today's stats with profile targets
-      setTodayStats((prev) => ({
-        ...prev,
-        calories: { ...prev.calories, target: profile?.daily_calories || 2000 },
-        protein: { ...prev.protein, target: profile?.daily_protein || 150 },
-        carbs: { ...prev.carbs, target: profile?.daily_carbs || 250 },
-        fat: { ...prev.fat, target: profile?.daily_fat || 67 },
-      }))
-
-      // Load data in background, don't block UI
-      Promise.all([loadDailyStats(userId), calculateUserStreak(userId)]).catch((error) => {
-        console.error("Error loading background data:", error)
-      })
+      // Calculate streak
+      await calculateUserStreak(userId)
     } catch (error) {
-      console.error("Error loading user profile:", error)
-
-      try {
-        const userDisplayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"
-
-        const newProfile = await createOrUpdateUserProfile(userId, userDisplayName)
-        setUserProfile(newProfile)
-        console.log("Fallback profile created:", newProfile)
-      } catch (fallbackError) {
-        console.error("Failed to create fallback profile:", fallbackError)
-        setUserProfile({
-          id: "temp",
-          user_id: userId,
-          full_name: user?.user_metadata?.full_name || "User",
-          daily_calories: 2000,
-          daily_protein: 150,
-          daily_carbs: 250,
-          daily_fat: 67,
-          goal_type: "maintenance",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-      }
-    } finally {
-      setProfileLoading(false)
+      console.error("Error loading user data:", error)
     }
   }
 
@@ -300,27 +254,32 @@ export default function DietTrackerApp() {
       const today = getISTDate()
       console.log("Current IST date:", today)
       
+      // Load nutrition summary
       const summary = await getDailyNutritionSummary(userId, today)
       console.log("Nutrition summary:", summary)
 
-      // Load water intake for today with error handling
+      // Load water intake with proper error handling
+      let todayWater = 0
       try {
         console.log("Loading water intake...")
-        const todayWater = await getWaterIntake(userId, today)
+        todayWater = await getWaterIntake(userId, today)
         console.log("Water intake loaded:", todayWater)
-        
-        setWaterGlasses(todayWater)
-        setTodayStats((prev) => ({
-          calories: { consumed: summary.total_calories, target: prev.calories.target },
-          protein: { consumed: summary.total_protein, target: prev.protein.target },
-          carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
-          fat: { consumed: summary.total_fat, target: prev.fat.target },
-          water: { consumed: todayWater, target: 8 },
-        }))
-        console.log("Stats updated successfully")
       } catch (waterError) {
         console.error("Error loading water intake:", waterError)
+        // Keep default value of 0
       }
+      
+      // Update both state variables
+      setWaterGlasses(todayWater)
+      setTodayStats((prev) => ({
+        ...prev,
+        calories: { consumed: summary.total_calories, target: prev.calories.target },
+        protein: { consumed: summary.total_protein, target: prev.protein.target },
+        carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
+        fat: { consumed: summary.total_fat, target: prev.fat.target },
+        water: { consumed: todayWater, target: 8 },
+      }))
+      console.log("Stats updated successfully")
     } catch (error) {
       console.error("Error loading daily stats:", error)
     }
