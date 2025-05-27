@@ -124,7 +124,7 @@ export default function DietTrackerApp() {
       console.log("Adding water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount)
+      const result = await logWaterIntake(user.id, newCount, getISTDate())
       console.log("Supabase save result:", result)
       
       if (result) {
@@ -132,7 +132,7 @@ export default function DietTrackerApp() {
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
-          water: { ...prev.water, consumed: newCount },
+          water: { consumed: newCount, target: 8 },
         }))
 
         // Analytics tracking
@@ -164,7 +164,7 @@ export default function DietTrackerApp() {
       console.log("Removing water glass, new count:", newCount)
       
       // Save to database first
-      const result = await logWaterIntake(user.id, newCount)
+      const result = await logWaterIntake(user.id, newCount, getISTDate())
       console.log("Supabase save result:", result)
       
       if (result) {
@@ -172,7 +172,7 @@ export default function DietTrackerApp() {
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
-          water: { ...prev.water, consumed: newCount },
+          water: { consumed: newCount, target: 8 },
         }))
         console.log("Water glass removed successfully, UI updated")
       } else {
@@ -258,21 +258,13 @@ export default function DietTrackerApp() {
       const summary = await getDailyNutritionSummary(userId, today)
       console.log("Nutrition summary:", summary)
 
-      // Load water intake with proper error handling
-      let todayWater = 0
-      try {
-        console.log("Loading water intake...")
-        todayWater = await getWaterIntake(userId, today)
-        console.log("Water intake loaded:", todayWater)
-      } catch (waterError) {
-        console.error("Error loading water intake:", waterError)
-        // Keep default value of 0
-      }
+      // Load water intake
+      const todayWater = await getWaterIntake(userId, today)
+      console.log("Water intake loaded:", todayWater)
       
-      // Update both state variables
+      // Update state
       setWaterGlasses(todayWater)
       setTodayStats((prev) => ({
-        ...prev,
         calories: { consumed: summary.total_calories, target: prev.calories.target },
         protein: { consumed: summary.total_protein, target: prev.protein.target },
         carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
