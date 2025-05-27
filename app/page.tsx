@@ -50,7 +50,7 @@ export default function DietTrackerApp() {
     protein: { consumed: 0, target: 150 },
     carbs: { consumed: 0, target: 250 },
     fat: { consumed: 0, target: 67 },
-    water: { consumed: 5, target: 8 },
+    water: { consumed: 0, target: 8 },
   })
   const [waterGlasses, setWaterGlasses] = useState(0)
   const [userStreak, setUserStreak] = useState(0)
@@ -116,38 +116,55 @@ export default function DietTrackerApp() {
   const addWaterGlass = async () => {
     if (!user?.id) return
 
-    const newCount = waterGlasses + 1
-    setWaterGlasses(newCount)
+    try {
+      const newCount = waterGlasses + 1
+      
+      // Save to database first
+      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      
+      if (result) {
+        // Only update UI if save was successful
+        setWaterGlasses(newCount)
+        setTodayStats((prev) => ({
+          ...prev,
+          water: { consumed: newCount, target: 8 },
+        }))
 
-    // Update today's stats
-    setTodayStats((prev) => ({
-      ...prev,
-      water: { consumed: newCount, target: 8 },
-    }))
-
-    // Analytics tracking
-    analytics.trackWaterGlassAdded(newCount)
-    if (newCount >= 8) {
-      analytics.trackWaterGoalAchieved(newCount)
+        // Analytics tracking
+        analytics.trackWaterGlassAdded(newCount)
+        if (newCount >= 8) {
+          analytics.trackWaterGoalAchieved(newCount)
+        }
+      } else {
+        console.error("Failed to save water intake")
+      }
+    } catch (error) {
+      console.error("Error adding water glass:", error)
     }
-
-    // Save to database with IST date
-    await logWaterIntake(user.id, newCount, getISTDate())
   }
 
   const removeWaterGlass = async () => {
     if (!user?.id || waterGlasses <= 0) return
 
-    const newCount = waterGlasses - 1
-    setWaterGlasses(newCount)
-
-    setTodayStats((prev) => ({
-      ...prev,
-      water: { consumed: newCount, target: 8 },
-    }))
-
-    // Save to database with IST date
-    await logWaterIntake(user.id, newCount, getISTDate())
+    try {
+      const newCount = waterGlasses - 1
+      
+      // Save to database first
+      const result = await logWaterIntake(user.id, newCount, getISTDate())
+      
+      if (result) {
+        // Only update UI if save was successful
+        setWaterGlasses(newCount)
+        setTodayStats((prev) => ({
+          ...prev,
+          water: { consumed: newCount, target: 8 },
+        }))
+      } else {
+        console.error("Failed to save water intake")
+      }
+    } catch (error) {
+      console.error("Error removing water glass:", error)
+    }
   }
 
   const calculateUserStreak = async (userId: string) => {
@@ -266,17 +283,22 @@ export default function DietTrackerApp() {
       const today = getISTDate()
       const summary = await getDailyNutritionSummary(userId, today)
 
-      // Load water intake for today
-      const todayWater = await getWaterIntake(userId, today)
-      setWaterGlasses(todayWater)
-
-      setTodayStats((prev) => ({
-        calories: { consumed: summary.total_calories, target: prev.calories.target },
-        protein: { consumed: summary.total_protein, target: prev.protein.target },
-        carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
-        fat: { consumed: summary.total_fat, target: prev.fat.target },
-        water: { consumed: todayWater, target: 8 },
-      }))
+      // Load water intake for today with error handling
+      try {
+        const todayWater = await getWaterIntake(userId, today)
+        setWaterGlasses(todayWater)
+        
+        setTodayStats((prev) => ({
+          calories: { consumed: summary.total_calories, target: prev.calories.target },
+          protein: { consumed: summary.total_protein, target: prev.protein.target },
+          carbs: { consumed: summary.total_carbs, target: prev.carbs.target },
+          fat: { consumed: summary.total_fat, target: prev.fat.target },
+          water: { consumed: todayWater, target: 8 },
+        }))
+      } catch (waterError) {
+        console.error("Error loading water intake:", waterError)
+        // Keep existing water values on error
+      }
     } catch (error) {
       console.error("Error loading daily stats:", error)
     }

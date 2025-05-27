@@ -13,21 +13,36 @@ export interface WaterEntry {
 
 // Log or update water intake for a specific IST date
 export async function logWaterIntake(userId: string, glasses: number, istDate?: string): Promise<WaterEntry | null> {
+  if (!userId) {
+    console.error("User ID is required for logging water intake")
+    return null
+  }
+
+  if (glasses < 0) {
+    console.error("Glasses consumed cannot be negative")
+    return null
+  }
+
   try {
     const targetDate = istDate || getISTDate()
     const now = getISTDateTime()
 
     // Check if entry exists for the IST date
-    const { data: existingEntry } = await supabase
+    const { data: existingEntry, error: fetchError } = await supabase
       .from("water_entries")
       .select("*")
       .eq("user_id", userId)
       .eq("ist_date", targetDate)
       .maybeSingle()
 
+    if (fetchError) {
+      console.error("Error checking existing water entry:", fetchError)
+      return null
+    }
+
     if (existingEntry) {
       // Update existing entry
-      const { data, error } = await supabase
+      const { data, error: updateError } = await supabase
         .from("water_entries")
         .update({
           glasses_consumed: glasses,
@@ -38,11 +53,14 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         .select()
         .single()
 
-      if (error) throw error
+      if (updateError) {
+        console.error("Error updating water entry:", updateError)
+        return null
+      }
       return data
     } else {
       // Create new entry
-      const { data, error } = await supabase
+      const { data, error: insertError } = await supabase
         .from("water_entries")
         .insert([
           {
@@ -55,7 +73,10 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
         .select()
         .single()
 
-      if (error) throw error
+      if (insertError) {
+        console.error("Error creating water entry:", insertError)
+        return null
+      }
       return data
     }
   } catch (error) {
@@ -66,6 +87,11 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
 
 // Get water intake for a specific IST date
 export async function getWaterIntake(userId: string, istDate?: string): Promise<number> {
+  if (!userId) {
+    console.error("User ID is required for getting water intake")
+    return 0
+  }
+
   try {
     const targetDate = istDate || getISTDate()
 
@@ -76,7 +102,10 @@ export async function getWaterIntake(userId: string, istDate?: string): Promise<
       .eq("ist_date", targetDate)
       .maybeSingle()
 
-    if (error) throw error
+    if (error) {
+      console.error("Error getting water intake:", error)
+      return 0
+    }
     return data?.glasses_consumed || 0
   } catch (error) {
     console.error("Error getting water intake:", error)

@@ -2,7 +2,6 @@ import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
 import { UserbackScript } from "@/components/userback-script"
-import { Header } from "@/components/layout/Header"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ClientProviders } from "@/components/client-providers"
 
@@ -22,7 +21,6 @@ export default function RootLayout({
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <ClientProviders>
-            <Header />
             <main>{children}</main>
           </ClientProviders>
         </ThemeProvider>
