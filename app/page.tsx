@@ -115,20 +115,20 @@ export default function DietTrackerApp() {
 
   const addWaterGlass = async () => {
     if (!user?.id) {
-      console.error("Cannot add water: No user ID")
+      console.error("[Water] Cannot add water: No user ID")
       return
     }
 
     try {
       const newCount = waterGlasses + 1
-      console.log("Adding water glass, new count:", newCount)
+      console.log("[Water] Adding water glass, new count:", newCount)
       
       // Save to database first
       const result = await logWaterIntake(user.id, newCount, getISTDate())
-      console.log("Supabase save result:", result)
+      console.log("[Water] Supabase save result:", result)
       
       if (result) {
-        // Only update UI if save was successful
+        // Update state atomically
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
@@ -140,46 +140,46 @@ export default function DietTrackerApp() {
         if (newCount >= 8) {
           analytics.trackWaterGoalAchieved(newCount)
         }
-        console.log("Water glass added successfully, UI updated")
+        console.log("[Water] State updated successfully:", { waterGlasses: newCount })
       } else {
-        console.error("Failed to save water intake to Supabase")
+        console.error("[Water] Failed to save water intake to Supabase")
       }
     } catch (error) {
-      console.error("Error adding water glass:", error)
+      console.error("[Water] Error adding water glass:", error)
     }
   }
 
   const removeWaterGlass = async () => {
     if (!user?.id) {
-      console.error("Cannot remove water: No user ID")
+      console.error("[Water] Cannot remove water: No user ID")
       return
     }
     if (waterGlasses <= 0) {
-      console.error("Cannot remove water: Already at 0")
+      console.error("[Water] Cannot remove water: Already at 0")
       return
     }
 
     try {
       const newCount = waterGlasses - 1
-      console.log("Removing water glass, new count:", newCount)
+      console.log("[Water] Removing water glass, new count:", newCount)
       
       // Save to database first
       const result = await logWaterIntake(user.id, newCount, getISTDate())
-      console.log("Supabase save result:", result)
+      console.log("[Water] Supabase save result:", result)
       
       if (result) {
-        // Only update UI if save was successful
+        // Update state atomically
         setWaterGlasses(newCount)
         setTodayStats((prev) => ({
           ...prev,
           water: { consumed: newCount, target: 8 },
         }))
-        console.log("Water glass removed successfully, UI updated")
+        console.log("[Water] State updated successfully:", { waterGlasses: newCount })
       } else {
-        console.error("Failed to save water intake to Supabase")
+        console.error("[Water] Failed to save water intake to Supabase")
       }
     } catch (error) {
-      console.error("Error removing water glass:", error)
+      console.error("[Water] Error removing water glass:", error)
     }
   }
 
@@ -250,19 +250,19 @@ export default function DietTrackerApp() {
 
   const loadDailyStats = async (userId: string) => {
     try {
-      console.log("Loading daily stats for user:", userId)
+      console.log("[Stats] Loading daily stats for user:", userId)
       const today = getISTDate()
-      console.log("Current IST date:", today)
+      console.log("[Stats] Current IST date:", today)
       
       // Load nutrition summary
       const summary = await getDailyNutritionSummary(userId, today)
-      console.log("Nutrition summary:", summary)
+      console.log("[Stats] Nutrition summary:", summary)
 
       // Load water intake
       const todayWater = await getWaterIntake(userId, today)
-      console.log("Water intake loaded:", todayWater)
+      console.log("[Stats] Water intake loaded:", todayWater)
       
-      // Update state
+      // Update state atomically to prevent race conditions
       setWaterGlasses(todayWater)
       setTodayStats((prev) => ({
         calories: { consumed: summary.total_calories, target: prev.calories.target },
@@ -271,9 +271,9 @@ export default function DietTrackerApp() {
         fat: { consumed: summary.total_fat, target: prev.fat.target },
         water: { consumed: todayWater, target: 8 },
       }))
-      console.log("Stats updated successfully")
+      console.log("[Stats] State updated:", { waterGlasses: todayWater, summary, todayStats })
     } catch (error) {
-      console.error("Error loading daily stats:", error)
+      console.error("[Stats] Error loading daily stats:", error)
     }
   }
 
