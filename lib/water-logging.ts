@@ -33,7 +33,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
     // Check if entry exists first
     const { data: existingEntry, error: checkError } = await supabase
       .from("water_entries")
-      .select("*")
+      .select("id, user_id, glasses_consumed, ist_date, created_at, updated_at")
       .eq("user_id", userId)
       .eq("ist_date", targetDate)
       .single()
@@ -55,7 +55,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingEntry.id)
-        .select()
+        .select("id, user_id, glasses_consumed, ist_date, created_at, updated_at")
         .single()
 
       if (updateError) {
@@ -79,7 +79,7 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
           updated_at: new Date().toISOString(),
         },
       ])
-      .select()
+      .select("id, user_id, glasses_consumed, ist_date, created_at, updated_at")
       .single()
 
     if (insertError) {
@@ -151,7 +151,7 @@ export async function getWaterHistory(userId: string, days = 7): Promise<WaterEn
 
     const { data, error } = await supabase
       .from("water_entries")
-      .select("*")
+      .select("id, user_id, glasses_consumed, ist_date, created_at, updated_at")
       .eq("user_id", userId)
       .gte("ist_date", startDate)
       .lte("ist_date", endDate)
@@ -186,7 +186,7 @@ export async function getWaterIntakeRange(userId: string, startDate: string, end
 
     const { data, error } = await supabase
       .from("water_entries")
-      .select("*")
+      .select("id, user_id, glasses_consumed, ist_date, created_at, updated_at")
       .eq("user_id", userId)
       .gte("ist_date", startDate)
       .lte("ist_date", endDate)
