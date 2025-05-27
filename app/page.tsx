@@ -114,13 +114,18 @@ export default function DietTrackerApp() {
   }
 
   const addWaterGlass = async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.error("Cannot add water: No user ID")
+      return
+    }
 
     try {
       const newCount = waterGlasses + 1
+      console.log("Adding water glass, new count:", newCount)
       
       // Save to database first
       const result = await logWaterIntake(user.id, newCount, getISTDate())
+      console.log("Supabase save result:", result)
       
       if (result) {
         // Only update UI if save was successful
@@ -135,8 +140,9 @@ export default function DietTrackerApp() {
         if (newCount >= 8) {
           analytics.trackWaterGoalAchieved(newCount)
         }
+        console.log("Water glass added successfully, UI updated")
       } else {
-        console.error("Failed to save water intake")
+        console.error("Failed to save water intake to Supabase")
       }
     } catch (error) {
       console.error("Error adding water glass:", error)
@@ -144,13 +150,22 @@ export default function DietTrackerApp() {
   }
 
   const removeWaterGlass = async () => {
-    if (!user?.id || waterGlasses <= 0) return
+    if (!user?.id) {
+      console.error("Cannot remove water: No user ID")
+      return
+    }
+    if (waterGlasses <= 0) {
+      console.error("Cannot remove water: Already at 0")
+      return
+    }
 
     try {
       const newCount = waterGlasses - 1
+      console.log("Removing water glass, new count:", newCount)
       
       // Save to database first
       const result = await logWaterIntake(user.id, newCount, getISTDate())
+      console.log("Supabase save result:", result)
       
       if (result) {
         // Only update UI if save was successful
@@ -159,8 +174,9 @@ export default function DietTrackerApp() {
           ...prev,
           water: { consumed: newCount, target: 8 },
         }))
+        console.log("Water glass removed successfully, UI updated")
       } else {
-        console.error("Failed to save water intake")
+        console.error("Failed to save water intake to Supabase")
       }
     } catch (error) {
       console.error("Error removing water glass:", error)
@@ -280,14 +296,20 @@ export default function DietTrackerApp() {
 
   const loadDailyStats = async (userId: string) => {
     try {
+      console.log("Loading daily stats for user:", userId)
       const today = getISTDate()
+      console.log("Current IST date:", today)
+      
       const summary = await getDailyNutritionSummary(userId, today)
+      console.log("Nutrition summary:", summary)
 
       // Load water intake for today with error handling
       try {
+        console.log("Loading water intake...")
         const todayWater = await getWaterIntake(userId, today)
-        setWaterGlasses(todayWater)
+        console.log("Water intake loaded:", todayWater)
         
+        setWaterGlasses(todayWater)
         setTodayStats((prev) => ({
           calories: { consumed: summary.total_calories, target: prev.calories.target },
           protein: { consumed: summary.total_protein, target: prev.protein.target },
@@ -295,9 +317,9 @@ export default function DietTrackerApp() {
           fat: { consumed: summary.total_fat, target: prev.fat.target },
           water: { consumed: todayWater, target: 8 },
         }))
+        console.log("Stats updated successfully")
       } catch (waterError) {
         console.error("Error loading water intake:", waterError)
-        // Keep existing water values on error
       }
     } catch (error) {
       console.error("Error loading daily stats:", error)

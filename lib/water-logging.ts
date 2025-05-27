@@ -25,62 +25,47 @@ export async function logWaterIntake(userId: string, glasses: number, istDate?: 
 
   try {
     const targetDate = istDate || getISTDate()
-    const now = getISTDateTime()
+    console.log(`Logging water intake for user ${userId} on ${targetDate}: ${glasses} glasses`)
 
-    // Check if entry exists for the IST date
-    const { data: existingEntry, error: fetchError } = await supabase
+    // First try to update existing entry
+    const { data: updateData, error: updateError } = await supabase
       .from("water_entries")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("ist_date", targetDate)
-      .maybeSingle()
+      .update({
+        glasses_consumed: glasses,
+        updated_at: new Date().toISOString(),
+      })
+      .match({ user_id: userId, ist_date: targetDate })
+      .select()
+      .single()
 
-    if (fetchError) {
-      console.error("Error checking existing water entry:", fetchError)
+    if (!updateError && updateData) {
+      console.log("Successfully updated existing water entry:", updateData)
+      return updateData
+    }
+
+    // If no existing entry found, create a new one
+    const { data: insertData, error: insertError } = await supabase
+      .from("water_entries")
+      .insert([
+        {
+          user_id: userId,
+          glasses_consumed: glasses,
+          ist_date: targetDate,
+          logged_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error("Error inserting water entry:", insertError)
       return null
     }
 
-    if (existingEntry) {
-      // Update existing entry
-      const { data, error: updateError } = await supabase
-        .from("water_entries")
-        .update({
-          glasses_consumed: glasses,
-          logged_at: now,
-          updated_at: now,
-        })
-        .eq("id", existingEntry.id)
-        .select()
-        .single()
-
-      if (updateError) {
-        console.error("Error updating water entry:", updateError)
-        return null
-      }
-      return data
-    } else {
-      // Create new entry
-      const { data, error: insertError } = await supabase
-        .from("water_entries")
-        .insert([
-          {
-            user_id: userId,
-            glasses_consumed: glasses,
-            ist_date: targetDate,
-            logged_at: now,
-          },
-        ])
-        .select()
-        .single()
-
-      if (insertError) {
-        console.error("Error creating water entry:", insertError)
-        return null
-      }
-      return data
-    }
+    console.log("Successfully created new water entry:", insertData)
+    return insertData
   } catch (error) {
-    console.error("Error logging water intake:", error)
+    console.error("Error in logWaterIntake:", error)
     return null
   }
 }
@@ -94,21 +79,23 @@ export async function getWaterIntake(userId: string, istDate?: string): Promise<
 
   try {
     const targetDate = istDate || getISTDate()
+    console.log(`Getting water intake for user ${userId} on ${targetDate}`)
 
     const { data, error } = await supabase
       .from("water_entries")
       .select("glasses_consumed")
-      .eq("user_id", userId)
-      .eq("ist_date", targetDate)
-      .maybeSingle()
+      .match({ user_id: userId, ist_date: targetDate })
+      .single()
 
     if (error) {
-      console.error("Error getting water intake:", error)
+      console.error("Error fetching water intake:", error)
       return 0
     }
+
+    console.log("Retrieved water intake:", data?.glasses_consumed || 0)
     return data?.glasses_consumed || 0
   } catch (error) {
-    console.error("Error getting water intake:", error)
+    console.error("Error in getWaterIntake:", error)
     return 0
   }
 }
