@@ -15,6 +15,7 @@ import type { User as AuthUser } from "@supabase/supabase-js"
 import type { UserProfileType } from "@/lib/supabase"
 import { analytics, usePageTracking } from "@/lib/analytics"
 import { trackEvent } from "@/lib/analytics"
+import { FeedbackForm } from "@/components/feedback/FeedbackForm"
 
 interface UserProfileProps {
   user: AuthUser
@@ -44,9 +45,9 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
 
   const [formData, setFormData] = useState({
     full_name: userProfile?.full_name || "",
-    age: userProfile?.age || "",
-    height: userProfile?.height || "",
-    weight: userProfile?.weight || "",
+    age: userProfile?.age?.toString() || "",
+    height: userProfile?.height?.toString() || "",
+    weight: userProfile?.weight?.toString() || "",
     activity_level: userProfile?.activity_level || "moderate",
     goal_type: userProfile?.goal_type || "maintenance",
     dietary_restrictions: userProfile?.dietary_restrictions || "",
@@ -60,9 +61,9 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
     if (userProfile) {
       setFormData({
         full_name: userProfile.full_name || "",
-        age: userProfile.age || "",
-        height: userProfile.height || "",
-        weight: userProfile.weight || "",
+        age: userProfile.age?.toString() || "",
+        height: userProfile.height?.toString() || "",
+        weight: userProfile.weight?.toString() || "",
         activity_level: userProfile.activity_level || "moderate",
         goal_type: userProfile.goal_type || "maintenance",
         dietary_restrictions: userProfile.dietary_restrictions || "",
@@ -241,9 +242,9 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
   const handleCancel = () => {
     setFormData({
       full_name: userProfile?.full_name || "",
-      age: userProfile?.age || "",
-      height: userProfile?.height || "",
-      weight: userProfile?.weight || "",
+      age: userProfile?.age?.toString() || "",
+      height: userProfile?.height?.toString() || "",
+      weight: userProfile?.weight?.toString() || "",
       activity_level: userProfile?.activity_level || "moderate",
       goal_type: userProfile?.goal_type || "maintenance",
       dietary_restrictions: userProfile?.dietary_restrictions || "",
@@ -641,6 +642,127 @@ export default function UserProfile({ user, userProfile, onProfileUpdate }: User
             <p>
               <strong>Goal:</strong> {formData.goal_type.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Security Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Security & Feedback
+          </CardTitle>
+          <CardDescription>Manage your account security and provide feedback</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="font-medium mb-1">Change Password</h4>
+              <p className="text-sm text-gray-500">Update your account password</p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowPasswordSection(!showPasswordSection)}
+            >
+              {showPasswordSection ? "Cancel" : "Change Password"}
+            </Button>
+          </div>
+
+          {showPasswordSection && (
+            <div className="space-y-2">
+              <div className="space-y-2">
+                <Label htmlFor="new_password" className="text-gray-700">
+                  New Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="new_password"
+                    type={showPasswords.new ? "text" : "password"}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary pr-10"
+                    placeholder="Enter new password (min 6 characters)"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                  >
+                    {showPasswords.new ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm_password" className="text-gray-700">
+                  Confirm New Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirm_password"
+                    type={showPasswords.confirm ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    className="border-gray-300 rounded-custom focus:border-primary focus:ring-primary pr-10"
+                    placeholder="Confirm new password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                  >
+                    {showPasswords.confirm ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <Button
+                onClick={handlePasswordChange}
+                disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                className="w-full bg-primary hover:bg-primary/90 rounded-custom"
+              >
+                {passwordLoading ? "Updating..." : "Update Password"}
+              </Button>
+            </div>
+          )}
+
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-medium mb-1">Provide Feedback</h4>
+                <p className="text-sm text-gray-500">Help us improve your experience</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowFeedbackSection(!showFeedbackSection)}
+              >
+                {showFeedbackSection ? "Close" : "Give Feedback"}
+              </Button>
+            </div>
+
+            {showFeedbackSection && (
+              <div className="mt-4">
+                <FeedbackForm 
+                  onSuccess={() => {
+                    setShowFeedbackSection(false)
+                    setSuccess("Thank you for your feedback!")
+                  }}
+                />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
