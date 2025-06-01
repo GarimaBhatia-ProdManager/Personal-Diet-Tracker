@@ -186,6 +186,18 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     }
   }
 
+<<<<<<< HEAD
+=======
+  const fillDemoAccount = () => {
+    setFormData({
+      ...formData,
+      email: "demo@example.com",
+      password: "demo123",
+    })
+    setActiveTab("signin")
+  }
+
+>>>>>>> origin/main
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-green-50 p-4">
       <Card className="w-full max-w-md bg-white shadow-xl rounded-custom">
@@ -493,6 +505,25 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
               </form>
             </TabsContent>
           </Tabs>
+<<<<<<< HEAD
+=======
+
+          {/* Demo Account Section */}
+          <div className="space-y-3">
+            <div className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-custom">
+              <p className="font-medium mb-1">🚀 Try the Demo Account</p>
+              <p className="text-xs mb-2">Email: demo@example.com | Password: demo123</p>
+              <Button
+                onClick={fillDemoAccount}
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-custom border-gray-300"
+              >
+                Fill Demo Credentials
+              </Button>
+            </div>
+          </div>
+>>>>>>> origin/main
         </CardContent>
       </Card>
     </div>
