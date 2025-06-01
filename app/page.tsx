@@ -321,8 +321,8 @@ export default function DietTrackerApp() {
     setActiveTab(tab)
     analytics.trackTabSwitch(activeTab, tab)
 
-    // Reload data when switching to dashboard
-    if (tab === "dashboard" && user?.id) {
+    // Reload data for all tabs when switching
+    if (user?.id) {
       await loadDailyStats(user.id)
     }
   }

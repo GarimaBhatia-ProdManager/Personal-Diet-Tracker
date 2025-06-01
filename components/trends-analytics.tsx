@@ -41,6 +41,20 @@ export default function TrendsAnalytics({ userId, onLogMeal }: TrendsAnalyticsPr
     checkUserData()
   }, [userId])
 
+  // Add visibility change handler
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkUserData()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
   useEffect(() => {
     trackEvent({ event_type: ANALYTICS_EVENTS.TRENDS_VIEW })
   }, [])

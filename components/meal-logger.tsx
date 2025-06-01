@@ -44,10 +44,24 @@ export default function MealLogger({ userId }: MealLoggerProps) {
     serving: "",
   })
 
-  // Load today's meals on component mount
+  // Load today's meals on component mount and when tab becomes visible
   useEffect(() => {
     loadTodayMeals()
   }, [userId])
+
+  // Add visibility change handler
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadTodayMeals()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
 
   // Debounced search function with better error handling
   const debouncedSearch = useCallback(
